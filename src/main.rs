@@ -106,6 +106,11 @@ impl Scope {
                 let term = args.remove(0);
                 inner(self, *term, args)
             },
+            Expr::Atom(..) => {
+                self.lookup(&expr, |x| {
+                    x.expect("Eval failed to find named value").clone()
+                }).unwrap().clone()
+            },
             _ => expr,
         }
     }

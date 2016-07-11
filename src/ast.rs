@@ -2,6 +2,7 @@ use std::mem;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
+#[derive(Clone)]
 pub struct FnHolder {
     f: &'static Fn(Expr, Expr) -> Expr,
 }
@@ -42,7 +43,7 @@ impl fmt::Debug for FnHolder {
 
 impl Eq for FnHolder {}
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum Expr {
     Int(i32),
     Atom(String),
