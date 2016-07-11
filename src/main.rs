@@ -9,9 +9,17 @@ use std::rc::Rc;
 use std::collections::HashMap;
 use std::env;
 
+// Switch to Funcs in Scope
+
+#[derive(Clone)]
+pub enum ScopeValue {
+    FuncValue(&'static Fn(Expr, Expr) -> Expr),
+    ExprValue(Expr),
+}
+
 struct Scope {
     parent: Option<Rc<RefCell<Box<Scope>>>>,
-    scope: HashMap<Expr, Expr>,
+    scope: HashMap<Expr, ScopeValue>,
 }
 
 impl Scope {
@@ -23,7 +31,7 @@ impl Scope {
     }
 
     pub fn lookup<F, T>(&self, key: &Expr, mut inner: F) -> Option<T>
-    where F: FnMut(Option<&Expr>) -> T {
+    where F: FnMut(Option<&ScopeValue>) -> T {
         match self.scope.get(key) {
             Some(ref value) => {
                 Some(inner(Some(value)))
@@ -87,10 +95,10 @@ fn eval_expr(scope: &Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
         Atom(..) => {
             scope.lookup(&x, move |value| {
                 match value {
-                    Some(value) => {
-                        value.call(args.remove(0), args.remove(0))
+                    Some(&ScopeValue::FuncValue(func)) => {
+                        func(args.remove(0), args.remove(0))
                     }
-                    None => unreachable!(),
+                    _ => unreachable!(),
                 }
             }).unwrap()
         },
@@ -107,9 +115,13 @@ impl Scope {
                 inner(self, *term, args)
             },
             Expr::Atom(..) => {
-                self.lookup(&expr, |x| {
+                if let Some(ScopeValue::ExprValue(inner)) = self.lookup(&expr, |x| {
                     x.expect("Eval failed to find named value").clone()
-                }).unwrap().clone()
+                }) {
+                    inner
+                } else {
+                    unreachable!();
+                }
             },
             _ => expr,
         }
@@ -123,11 +135,11 @@ fn main() {
     let s2 = Scope::new(Some(s.clone()));
     {
         let mut s = s.borrow_mut();
-        s.scope.insert(Expr::Atom("true".to_owned()), Expr::Int(1));
-        s.scope.insert(Expr::Atom("+".to_owned()), Expr::Func(FnHolder::new(&EVAL_ADD as &'static _)));
-        s.scope.insert(Expr::Atom("-".to_owned()), Expr::Func(FnHolder::new(&EVAL_SUB as &'static _)));
-        s.scope.insert(Expr::Atom("*".to_owned()), Expr::Func(FnHolder::new(&EVAL_MUL as &'static _)));
-        s.scope.insert(Expr::Atom("/".to_owned()), Expr::Func(FnHolder::new(&EVAL_DIV as &'static _)));
+        s.scope.insert(Expr::Atom("true".to_owned()), ScopeValue::ExprValue(Expr::Int(1)));
+        s.scope.insert(Expr::Atom("+".to_owned()), ScopeValue::FuncValue(&EVAL_ADD as &'static _));
+        s.scope.insert(Expr::Atom("-".to_owned()), ScopeValue::FuncValue(&EVAL_SUB as &'static _));
+        s.scope.insert(Expr::Atom("*".to_owned()), ScopeValue::FuncValue(&EVAL_MUL as &'static _));
+        s.scope.insert(Expr::Atom("/".to_owned()), ScopeValue::FuncValue(&EVAL_DIV as &'static _));
     }
     //s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
     //    println!("lookup {:?}", expr);
