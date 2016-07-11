@@ -2,5 +2,10 @@
 name = "pauseless"
 version = "0.1.0"
 authors = ["tim"]
+build = "build.rs" # <-- We added this and everything after!
+
+[build-dependencies]
+lalrpop = "0.11.0"
 
 [dependencies]
+lalrpop-util = "0.11.0"

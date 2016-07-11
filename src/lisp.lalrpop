@@ -1,0 +1,22 @@
+use std::str::FromStr;
+use ast::*;
+
+grammar;
+
+pub Exprs: Vec<Box<Expr>> = { // (1)
+    <v:(<Expr>)*> => v,
+};
+
+Expr: Box<Expr> = {
+    "(" <Exprs> ")" => Box::new(Expr::SExpr(<>)),
+    Num => Box::new(Expr::Int(<>)),
+    Term => Box::new(Expr::Atom(<>)),
+};
+
+Term: String = {
+    r"[^\d\s\)\(]+" => (<>).to_owned()
+};
+
+Num: i32 = {
+    r"[0-9]+" => i32::from_str(<>).unwrap()
+};
