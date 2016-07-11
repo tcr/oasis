@@ -4,3 +4,9 @@ pub enum Expr {
     Atom(String),
     SExpr(Vec<Box<Expr>>),
 }
+
+impl Expr {
+    pub fn new_atom(key: &str) -> Expr {
+        Expr::Atom(key.to_owned())
+    }
+}
