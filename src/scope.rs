@@ -60,7 +60,12 @@ pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
                     Some(&ScopeValue::FuncValue(func)) => {
                         func(args.remove(0), args.remove(0))
                     }
-                    _ => unreachable!(),
+                    Some(&ScopeValue::ExprValue(ref value)) => {
+                        panic!("Called uncallable value: {:?}", value);
+                    }
+                    None => {
+                        panic!("Called value that doesn't exist");
+                    }
                 }
             }).unwrap()
         },

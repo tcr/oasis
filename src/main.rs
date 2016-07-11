@@ -46,7 +46,7 @@ static EVAL_DIV: fn(Expr, Expr) -> Expr = eval_div;
 
 fn main() {
     let content = env::args().nth(1).unwrap();
-    let mut parse = lisp::parse_Exprs(&content).unwrap();
+    let parse = lisp::parse_Exprs(&content).unwrap();
 
     let s = Scope::new(None);
     let s2 = Scope::new(Some(s.clone()));
@@ -57,12 +57,16 @@ fn main() {
         s.set(Expr::new_atom("-"), ScopeValue::FuncValue(&EVAL_SUB as &'static _));
         s.set(Expr::new_atom("*"), ScopeValue::FuncValue(&EVAL_MUL as &'static _));
         s.set(Expr::new_atom("/"), ScopeValue::FuncValue(&EVAL_DIV as &'static _));
+        s.set(Expr::new_atom("def"), ScopeValue::ExprValue(Expr::Int(1)));
     }
     //s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
     //    println!("lookup {:?}", expr);
     //});
 
-    let res = s2.borrow_mut().eval(*parse.remove(0), eval_expr);
+    let mut res = Expr::Int(-1);
+    for statement in parse {
+        res = s2.borrow_mut().eval(*statement, eval_expr);
+    }
 
     println!("{:?}", res);
 }
