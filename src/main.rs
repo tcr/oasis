@@ -1,7 +1,42 @@
-pub mod lisp; // synthesized by LALRPOP
+pub mod lisp;
 pub mod ast;
 
 use ast::*;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::collections::HashMap;
+
+struct Scope {
+    parent: Option<Rc<RefCell<Box<Scope>>>>,
+    scope: HashMap<Expr, Expr>,
+}
+
+impl Scope {
+    fn new(parent: Option<Rc<RefCell<Box<Scope>>>>) -> Rc<RefCell<Box<Scope>>> {
+        Rc::new(RefCell::new(Box::new(Scope {
+            parent: parent,
+            scope: HashMap::new()
+        })))
+    }
+
+    pub fn lookup<F>(&self, key: &Expr, inner: F) -> bool
+    where F: Fn(Option<&Expr>) {
+        match self.scope.get(key) {
+            Some(ref value) => {
+                inner(Some(value));
+                true
+            }
+            None => {
+                match self.parent {
+                    Some(ref parent) => {
+                        parent.borrow().lookup(key, inner)
+                    }
+                    None => false,
+                }
+            }
+        }
+    }
+}
 
 fn eval_add(a: Expr, b: Expr) -> Expr {
     Expr::Int(match (a, b) {
@@ -31,9 +66,12 @@ fn eval_div(a: Expr, b: Expr) -> Expr {
     })
 }
 
-fn eval_expr(x: Expr, args: Vec<Box<Expr>>) -> Expr {
+fn eval_expr(scope: &Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
     use ast::Expr::*;
-    let mut args: Vec<Expr> = args.into_iter().map(|x| x.eval(eval_expr)).collect();
+    let mut args: Vec<Expr> = args
+        .into_iter()
+        .map(|x| scope.eval(*x, eval_expr))
+        .collect();
     match x {
         Atom(kind) => match kind.as_ref() {
             "+" => eval_add(args.remove(0), args.remove(0)),
@@ -46,10 +84,30 @@ fn eval_expr(x: Expr, args: Vec<Box<Expr>>) -> Expr {
     }
 }
 
+impl Scope {
+    pub fn eval<F>(&self, expr: Expr, inner: F) -> Expr
+    where F: Fn(&Scope, Expr, Vec<Box<Expr>>) -> Expr {
+        match expr {
+            Expr::SExpr(mut args) => {
+                let term = args.remove(0);
+                inner(self, *term, args)
+            },
+            _ => expr,
+        }
+    }
+}
+
 fn main() {
     let mut parse = lisp::parse_Exprs("(+ (* 22 44) 66)").unwrap();
 
-    let res = parse.remove(0).eval(eval_expr);
+    let s = Scope::new(None);
+    let s2 = Scope::new(Some(s.clone()));
+    s.borrow_mut().scope.insert(Expr::Atom("true".to_owned()), Expr::Int(1));
+    s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
+        println!("lookup {:?}", expr);
+    });
+
+    let res = s2.borrow().eval(*parse.remove(0), eval_expr);
 
     println!("{:?}", res);
 }
