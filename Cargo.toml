@@ -1,5 +1,5 @@
 [package]
-name = "pauseless"
+name = "oasis"
 version = "0.1.0"
 authors = ["tim"]
 build = "build.rs" # <-- We added this and everything after!
