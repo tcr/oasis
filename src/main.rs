@@ -124,9 +124,9 @@ fn main() {
         s.scope.insert(Expr::Atom("*".to_owned()), Expr::Func(FnHolder::new(&EVAL_MUL as &'static _)));
         s.scope.insert(Expr::Atom("/".to_owned()), Expr::Func(FnHolder::new(&EVAL_DIV as &'static _)));
     }
-    s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
-        println!("lookup {:?}", expr);
-    });
+    //s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
+    //    println!("lookup {:?}", expr);
+    //});
 
     let res = s2.borrow().eval(*parse.remove(0), eval_expr);
 
