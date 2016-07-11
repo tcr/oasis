@@ -45,7 +45,8 @@ fn eval_div(a: Expr, b: Expr) -> Expr {
 static EVAL_DIV: fn(Expr, Expr) -> Expr = eval_div;
 
 fn main() {
-    let mut parse = lisp::parse_Exprs(&env::args().nth(1).unwrap()).unwrap();
+    let content = env::args().nth(1).unwrap();
+    let mut parse = lisp::parse_Exprs(&content).unwrap();
 
     let s = Scope::new(None);
     let s2 = Scope::new(Some(s.clone()));
@@ -61,7 +62,7 @@ fn main() {
     //    println!("lookup {:?}", expr);
     //});
 
-    let res = s2.borrow().eval(*parse.remove(0), eval_expr);
+    let res = s2.borrow_mut().eval(*parse.remove(0), eval_expr);
 
     println!("{:?}", res);
 }

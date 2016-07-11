@@ -3,6 +3,7 @@ pub enum Expr {
     Int(i32),
     Atom(String),
     SExpr(Vec<Box<Expr>>),
+    Str(String),
 }
 
 impl Expr {

@@ -46,7 +46,7 @@ impl Scope {
     }
 }
 
-pub fn eval_expr(scope: &Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
+pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
     use ast::Expr::*;
     let mut args: Vec<Expr> = args
         .into_iter()
@@ -69,8 +69,8 @@ pub fn eval_expr(scope: &Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
 }
 
 impl Scope {
-    pub fn eval<F>(&self, expr: Expr, inner: F) -> Expr
-    where F: Fn(&Scope, Expr, Vec<Box<Expr>>) -> Expr {
+    pub fn eval<F>(&mut self, expr: Expr, inner: F) -> Expr
+    where F: Fn(&mut Scope, Expr, Vec<Box<Expr>>) -> Expr {
         match expr {
             Expr::SExpr(mut args) => {
                 let term = args.remove(0);
@@ -82,7 +82,7 @@ impl Scope {
                 }) {
                     inner
                 } else {
-                    unreachable!();
+                    unreachable!("Cannot evaluate value {:?}", expr);
                 }
             },
             _ => expr,
