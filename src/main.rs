@@ -7,6 +7,7 @@ use ast::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
+use std::env;
 
 struct Scope {
     parent: Option<Rc<RefCell<Box<Scope>>>>,
@@ -111,7 +112,7 @@ impl Scope {
 }
 
 fn main() {
-    let mut parse = lisp::parse_Exprs("(+ (* 22 44) 66)").unwrap();
+    let mut parse = lisp::parse_Exprs(&env::args().nth(1).unwrap()).unwrap();
 
     let s = Scope::new(None);
     let s2 = Scope::new(Some(s.clone()));
