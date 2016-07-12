@@ -5,20 +5,22 @@ use std::collections::HashMap;
 
 // Switch to Funcs in Scope
 
+pub type ScopeRef = Rc<RefCell<Box<Scope>>>;
+
 pub enum ScopeValue {
-    FuncValue(&'static Fn(&mut Scope, Vec<Expr>) -> Expr),
-    MacroValue(&'static Fn(&mut Scope, Vec<Expr>) -> Expr),
-    DynFuncValue(Vec<Box<Fn(&mut Scope, Vec<Expr>) -> Expr>>),
+    FuncValue(&'static Fn(ScopeRef, Vec<Expr>) -> Expr),
+    MacroValue(&'static Fn(ScopeRef, Vec<Expr>) -> Expr),
+    DynFuncValue(Box<Fn(ScopeRef, Vec<Expr>) -> Expr>),
     ExprValue(Expr),
 }
 
 pub struct Scope {
-    parent: Option<Rc<RefCell<Box<Scope>>>>,
+    parent: Option<ScopeRef>,
     scope: HashMap<Expr, ScopeValue>,
 }
 
 impl Scope {
-    pub fn new(parent: Option<Rc<RefCell<Box<Scope>>>>) -> Rc<RefCell<Box<Scope>>> {
+    pub fn new(parent: Option<ScopeRef>) -> ScopeRef {
         Rc::new(RefCell::new(Box::new(Scope {
             parent: parent,
             scope: HashMap::new()
@@ -47,12 +49,12 @@ impl Scope {
     }
 }
 
-pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
+pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Box<Expr>>) -> Expr {
     use ast::Expr::*;
 
     match x {
         Atom(..) => {
-            let (func, do_eval) = scope.lookup(&x, |value| {
+            let (func, do_eval) = scope.borrow().lookup(&x, |value| {
                 match value {
                     Some(&ScopeValue::FuncValue(func)) => {
                         (func, true)
@@ -71,7 +73,11 @@ pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
 
             let args: Vec<Expr> = args
                 .into_iter()
-                .map(|x| if do_eval { scope.eval(*x, eval_expr) } else { *x })
+                .map(|x| if do_eval {
+                    eval(scope.clone(), *x, eval_expr)
+                } else {
+                    *x
+                })
                 .collect();
 
             func(scope, args)
@@ -80,24 +86,22 @@ pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
     }
 }
 
-impl Scope {
-    pub fn eval<F>(&mut self, expr: Expr, inner: F) -> Expr
-    where F: Fn(&mut Scope, Expr, Vec<Box<Expr>>) -> Expr {
-        match expr {
-            Expr::SExpr(mut args) => {
-                let term = args.remove(0);
-                inner(self, *term, args)
-            },
-            Expr::Atom(..) => {
-                self.lookup(&expr, |x| {
-                    if let Some(&ScopeValue::ExprValue(ref inner)) = x {
-                        inner.clone()
-                    } else {
-                        unreachable!("Cannot evaluate value {:?}", expr);
-                    }
-                }).expect("Eval failed to find named value")
-            },
-            _ => expr,
-        }
+pub fn eval<F>(scope: ScopeRef, expr: Expr, inner: F) -> Expr
+where F: Fn(ScopeRef, Expr, Vec<Box<Expr>>) -> Expr {
+    match expr {
+        Expr::SExpr(mut args) => {
+            let term = args.remove(0);
+            inner(scope, *term, args)
+        },
+        Expr::Atom(..) => {
+            scope.borrow().lookup(&expr, |x| {
+                if let Some(&ScopeValue::ExprValue(ref inner)) = x {
+                    inner.clone()
+                } else {
+                    unreachable!("Cannot evaluate value {:?}", expr);
+                }
+            }).expect("Eval failed to find named value")
+        },
+        _ => expr,
     }
 }
