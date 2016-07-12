@@ -3,8 +3,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
 
-// Switch to Funcs in Scope
-
 pub type ScopeRef = Rc<RefCell<Box<Scope>>>;
 
 pub enum ScopeValue {
