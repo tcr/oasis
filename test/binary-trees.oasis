@@ -36,6 +36,7 @@
             (inner 0 1))))
 
 (defn main (max-depth)
+  ; todo check max-depth is at least (+ 2 min-depth)
   (let (stretch-depth (+ max-depth 1))
     (let (tree (make-tree 0 stretch-depth)
           check (item-check tree))
@@ -49,10 +50,7 @@
         null))
 
     (inner min-depth)
-    (println "hey")
     (println "long lived tree of depth {0}\t check: {1}"
              max-depth (item-check long-lived-tree))))
 
-(main (+ 2 min-depth))
-
-; (make-tree 0 min-depth)
+(main 10)

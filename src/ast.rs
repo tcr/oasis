@@ -37,7 +37,7 @@ impl Expr {
         match self {
             &Expr::Str(ref value) => value.clone(),
             &Expr::Int(value) => format!("{}", value),
-            _ => "".to_string(),
+            rest => format!("{:?}", rest),
         }
     }
 }

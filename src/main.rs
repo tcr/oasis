@@ -15,10 +15,9 @@ use strfmt::strfmt;
 use std::collections::HashMap;
 
 fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
-    Expr::Int(match (&args[0], &args[1]) {
-        (&Expr::Int(a), &Expr::Int(b)) => a + b,
-        _ => 0
-    })
+    Expr::Int(args.iter()
+        .map(|x| x.as_int())
+        .fold(0, |sum, val| sum + val))
 }
 
 fn eval_sub(_: ScopeRef, args: Vec<Expr>) -> Expr {
@@ -74,7 +73,7 @@ fn eval_le(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
 fn eval_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
-    let value = args.remove(0);
+    let value = eval(scope.clone(), args.remove(0), eval_expr);
     scope.borrow_mut().set(key, ScopeValue::Expr(value));
     Expr::Null
 }
@@ -241,7 +240,9 @@ fn run() -> io::Result<()> {
         res = eval(s.clone(), statement, eval_expr);
     }
 
-    println!("{:?}", res);
+    // Uncomment to print final value.
+    let _ = res;
+    //println!("{:?}", res);
 
     Ok(())
 }
