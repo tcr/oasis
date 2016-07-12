@@ -16,13 +16,14 @@ macro_rules! alloc {
     };
 }
 
-pub type ExprFn = Fn(ScopeRef, Vec<Expr>) -> Expr;
+pub type FuncFn = Fn(Vec<Expr>) -> Expr;
+pub type MacroFn = Fn(ScopeRef, Vec<Expr>) -> Expr;
 
 pub type ScopeRef = Alloc<Scope>;
 
 pub enum ScopeValue {
-    Func(Alloc<ExprFn>),
-    Macro(Alloc<ExprFn>),
+    Func(Alloc<FuncFn>),
+    Macro(Alloc<MacroFn>),
     Expr(Expr),
 }
 
@@ -70,13 +71,13 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
 
     match x {
         Atom(..) => {
-            let (func, do_eval) = scope.borrow().lookup(&x, |value| {
+            let (func, mac, do_eval) = scope.borrow().lookup(&x, |value| {
                 match value {
                     Some(&ScopeValue::Func(ref func)) => {
-                        (func.clone(), true)
+                        (Some(func.clone()), None, true)
                     }
                     Some(&ScopeValue::Macro(ref func)) => {
-                        (func.clone(), false)
+                        (None, Some(func.clone()), false)
                     }
                     Some(&ScopeValue::Expr(ref value)) => {
                         panic!("Called uncallable value: {:?}", value);
@@ -96,8 +97,15 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
                 })
                 .collect();
 
-            let call = func.borrow();
-            call(scope, args)
+            if let Some(func) = func {
+                let call = func.borrow();
+                call(args)
+            } else if let Some(mac) = mac {
+                let call = mac.borrow();
+                call(scope, args)
+            } else {
+                Expr::Null
+            }
         },
         _ => unreachable!(),
     }

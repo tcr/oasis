@@ -31,7 +31,7 @@ fn macro_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
     let content = args;
     let parent_scope = scope.clone();
-    let closure: Alloc<ExprFn> = alloc!(move |_, args: Vec<Expr>| {
+    let closure: Alloc<FuncFn> = alloc!(move |args: Vec<Expr>| {
         let s2 = Scope::new(Some(parent_scope.clone()));
         for (item, value) in names.iter().zip(args) {
             s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
@@ -83,13 +83,13 @@ fn macro_let(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     res
 }
 
-fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
+fn eval_add(args: Vec<Expr>) -> Expr {
     Expr::Int(args.iter()
         .map(|x| x.as_int())
         .fold(0, |sum, val| sum + val))
 }
 
-fn eval_sub(_: ScopeRef, args: Vec<Expr>) -> Expr {
+fn eval_sub(args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], args.iter().nth(1)) {
         (&Expr::Int(a), Some(&Expr::Int(b))) => a - b,
         (&Expr::Int(a), None) => -a,
@@ -97,28 +97,28 @@ fn eval_sub(_: ScopeRef, args: Vec<Expr>) -> Expr {
     })
 }
 
-fn eval_mul(_: ScopeRef, args: Vec<Expr>) -> Expr {
+fn eval_mul(args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a * b,
         _ => 0
     })
 }
 
-fn eval_div(_: ScopeRef, args: Vec<Expr>) -> Expr {
+fn eval_div(args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a / b,
         _ => 0
     })
 }
 
-fn eval_bitshiftleft(_: ScopeRef, args: Vec<Expr>) -> Expr {
+fn eval_bitshiftleft(args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a << b,
         _ => 0
     })
 }
 
-fn eval_eq(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn eval_eq(mut args: Vec<Expr>) -> Expr {
     let a = args.remove(0);
     let b = args.remove(0);
 
@@ -129,7 +129,7 @@ fn eval_eq(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn eval_le(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn eval_le(mut args: Vec<Expr>) -> Expr {
     let a = args.remove(0);
     let b = args.remove(0);
 
@@ -140,34 +140,34 @@ fn eval_le(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn eval_vec(_: ScopeRef, args: Vec<Expr>) -> Expr {
+fn eval_vec(args: Vec<Expr>) -> Expr {
     Expr::SExpr(args)
 }
 
-fn eval_index(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn eval_index(mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
     let key = args.remove(0);
     value.as_vec()[key.as_int() as usize].clone()
 }
 
-fn eval_first(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn eval_first(mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
     value.as_vec()[0].clone()
 }
 
-fn eval_rest(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn eval_rest(mut args: Vec<Expr>) -> Expr {
     args.remove(0);
     Expr::SExpr(args)
 }
 
-fn eval_nullq(_: ScopeRef, args: Vec<Expr>) -> Expr {
+fn eval_nullq(args: Vec<Expr>) -> Expr {
     match &args[0] {
         &Expr::Null => Expr::Int(1),
         _ => Expr::Int(0),
     }
 }
 
-fn eval_println(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn eval_println(mut args: Vec<Expr>) -> Expr {
     let fmt = args.remove(0).as_string();
 
     let mut vars = HashMap::new();
@@ -179,7 +179,7 @@ fn eval_println(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
-fn eval_concat(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn eval_concat(mut args: Vec<Expr>) -> Expr {
     let mut list = args.remove(0);
     let add = args.remove(0);
 
@@ -187,7 +187,7 @@ fn eval_concat(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     list
 }
 
-fn eval_random(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn eval_random(mut args: Vec<Expr>) -> Expr {
     let n = args.remove(0);
 
     let mut rng = rand::thread_rng();
