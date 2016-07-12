@@ -6,8 +6,6 @@ pub mod scope;
 
 use ast::*;
 use scope::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::env;
 
 fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
@@ -92,7 +90,7 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
         res
     });
 
-    scope.borrow_mut().set(key, ScopeValue::DynFuncValue(Rc::new(RefCell::new(closure))));
+    scope.borrow_mut().set(key, ScopeValue::DynFuncValue(alloc_box(closure)));
     Expr::Null
 }
 

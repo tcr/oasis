@@ -3,12 +3,24 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
 
-pub type ScopeRef = Rc<RefCell<Box<Scope>>>;
+pub type Alloc<T> = Rc<RefCell<Box<T>>>;
+
+/// Allocate objects.
+pub fn alloc<T>(value: T) -> Alloc<T> {
+    Rc::new(RefCell::new(Box::new(value)))
+}
+
+/// Allocate unsized objects.
+pub fn alloc_box<T: ?Sized>(value: Box<T>) -> Alloc<T> {
+    Rc::new(RefCell::new(value))
+}
+
+pub type ScopeRef = Alloc<Scope>;
 
 pub enum ScopeValue {
     FuncValue(&'static Fn(ScopeRef, Vec<Expr>) -> Expr),
     MacroValue(&'static Fn(ScopeRef, Vec<Expr>) -> Expr),
-    DynFuncValue(Rc<RefCell<Box<Fn(ScopeRef, Vec<Expr>) -> Expr>>>),
+    DynFuncValue(Alloc<Fn(ScopeRef, Vec<Expr>) -> Expr>),
     ExprValue(Expr),
 }
 
@@ -19,10 +31,10 @@ pub struct Scope {
 
 impl Scope {
     pub fn new(parent: Option<ScopeRef>) -> ScopeRef {
-        Rc::new(RefCell::new(Box::new(Scope {
+        alloc(Scope {
             parent: parent,
             scope: HashMap::new()
-        })))
+        })
     }
 
     pub fn set(&mut self, key: Expr, value: ScopeValue) -> Option<ScopeValue> {
