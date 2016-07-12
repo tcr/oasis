@@ -39,7 +39,7 @@ fn eval_div(_: ScopeRef, args: Vec<Expr>) -> Expr {
 fn eval_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = args.remove(0);
-    scope.borrow_mut().set(key, ScopeValue::ExprValue(value));
+    scope.borrow_mut().set(key, ScopeValue::Expr(value));
     Expr::Null
 }
 
@@ -66,7 +66,7 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let closure: Alloc<ExprFn> = alloc!(move |_, args: Vec<Expr>| {
         let s2 = Scope::new(Some(parent_scope.clone()));
         for (item, value) in names.iter().zip(args) {
-            s2.borrow_mut().set((*item).clone(), ScopeValue::ExprValue(value.clone()));
+            s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
         }
 
         let mut res = Expr::Null;
@@ -76,7 +76,7 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
         res
     });
 
-    scope.borrow_mut().set(key, ScopeValue::FuncValue(closure));
+    scope.borrow_mut().set(key, ScopeValue::Func(closure));
     Expr::Null
 }
 
@@ -87,15 +87,14 @@ fn main() {
     let s = Scope::new(None);
     {
         let mut s = s.borrow_mut();
-        s.set(Expr::new_atom("true"), ScopeValue::ExprValue(Expr::Int(1)));
-        s.set(Expr::new_atom("+"), ScopeValue::new_fn(eval_add));
-        s.set(Expr::new_atom("-"), ScopeValue::new_fn(eval_sub));
-        s.set(Expr::new_atom("*"), ScopeValue::new_fn(eval_mul));
-        s.set(Expr::new_atom("/"), ScopeValue::new_fn(eval_div));
-        s.set(Expr::new_atom("def"), ScopeValue::new_macro(eval_def));
-        s.set(Expr::new_atom("defn"), ScopeValue::new_macro(eval_defn));
-        s.set(Expr::new_atom("vec"), ScopeValue::new_fn(eval_vec));
-        s.set(Expr::new_atom("index"), ScopeValue::new_fn(eval_index));
+        s.set_atom("+", ScopeValue::Func(alloc!(eval_add)));
+        s.set_atom("-", ScopeValue::Func(alloc!(eval_sub)));
+        s.set_atom("*", ScopeValue::Func(alloc!(eval_mul)));
+        s.set_atom("/", ScopeValue::Func(alloc!(eval_div)));
+        s.set_atom("def", ScopeValue::Macro(alloc!(eval_def)));
+        s.set_atom("defn", ScopeValue::Macro(alloc!(eval_defn)));
+        s.set_atom("vec", ScopeValue::Func(alloc!(eval_vec)));
+        s.set_atom("index", ScopeValue::Func(alloc!(eval_index)));
     }
 
     let mut res = Expr::Int(-1);
