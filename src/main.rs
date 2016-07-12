@@ -115,7 +115,7 @@ fn run() -> io::Result<()> {
         s.set_atom("rest", ScopeValue::Func(alloc!(eval_rest)));
     }
 
-    let mut res = Expr::Int(-1);
+    let mut res = Expr::Null;
     for statement in parse {
         res = eval(s.clone(), statement, eval_expr);
     }
