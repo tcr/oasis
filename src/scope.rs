@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 #[derive(Clone)]
 pub enum ScopeValue {
-    FuncValue(&'static Fn(Expr, Expr) -> Expr),
+    FuncValue(&'static Fn(&mut Scope, Expr, Expr) -> Expr),
     ExprValue(Expr),
 }
 
@@ -55,10 +55,10 @@ pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
 
     match x {
         Atom(..) => {
-            scope.lookup(&x, move |value| {
+            let (func, a, b) = scope.lookup(&x, move |value| {
                 match value {
                     Some(&ScopeValue::FuncValue(func)) => {
-                        func(args.remove(0), args.remove(0))
+                        (func, args.remove(0), args.remove(0))
                     }
                     Some(&ScopeValue::ExprValue(ref value)) => {
                         panic!("Called uncallable value: {:?}", value);
@@ -67,7 +67,9 @@ pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
                         panic!("Called value that doesn't exist");
                     }
                 }
-            }).unwrap()
+            }).unwrap();
+
+            func(scope, a, b)
         },
         _ => unreachable!(),
     }

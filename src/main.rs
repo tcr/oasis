@@ -8,41 +8,54 @@ use ast::*;
 use scope::*;
 use std::env;
 
-fn eval_add(a: Expr, b: Expr) -> Expr {
+fn eval_add(_: &mut Scope, a: Expr, b: Expr) -> Expr {
     Expr::Int(match (a, b) {
         (Expr::Int(a), Expr::Int(b)) => a + b,
         _ => 0
     })
 }
 
-static EVAL_ADD: fn(Expr, Expr) -> Expr = eval_add;
+static EVAL_ADD: fn(&mut Scope, Expr, Expr) -> Expr = eval_add;
 
-fn eval_sub(a: Expr, b: Expr) -> Expr {
+fn eval_sub(_: &mut Scope, a: Expr, b: Expr) -> Expr {
     Expr::Int(match (a, b) {
         (Expr::Int(a), Expr::Int(b)) => a - b,
         _ => 0
     })
 }
 
-static EVAL_SUB: fn(Expr, Expr) -> Expr = eval_sub;
+static EVAL_SUB: fn(&mut Scope, Expr, Expr) -> Expr = eval_sub;
 
-fn eval_mul(a: Expr, b: Expr) -> Expr {
+fn eval_mul(_: &mut Scope, a: Expr, b: Expr) -> Expr {
     Expr::Int(match (a, b) {
         (Expr::Int(a), Expr::Int(b)) => a * b,
         _ => 0
     })
 }
 
-static EVAL_MUL: fn(Expr, Expr) -> Expr = eval_mul;
+static EVAL_MUL: fn(&mut Scope, Expr, Expr) -> Expr = eval_mul;
 
-fn eval_div(a: Expr, b: Expr) -> Expr {
+fn eval_div(_: &mut Scope, a: Expr, b: Expr) -> Expr {
     Expr::Int(match (a, b) {
         (Expr::Int(a), Expr::Int(b)) => a / b,
         _ => 0
     })
 }
 
-static EVAL_DIV: fn(Expr, Expr) -> Expr = eval_div;
+static EVAL_DIV: fn(&mut Scope, Expr, Expr) -> Expr = eval_div;
+
+fn eval_def(scope: &mut Scope, a: Expr, b: Expr) -> Expr {
+    match a {
+        Expr::Str(key) => {
+            println!("way {:?}", key);
+            scope.set(Expr::Atom(key), ScopeValue::ExprValue(b));
+        }
+        _ => unreachable!("Dont do that")
+    }
+    Expr::Null
+}
+
+static EVAL_DEF: fn(&mut Scope, Expr, Expr) -> Expr = eval_def;
 
 fn main() {
     let content = env::args().nth(1).unwrap();
@@ -53,11 +66,11 @@ fn main() {
     {
         let mut s = s.borrow_mut();
         s.set(Expr::new_atom("true"), ScopeValue::ExprValue(Expr::Int(1)));
-        s.set(Expr::new_atom("+"), ScopeValue::FuncValue(&EVAL_ADD as &'static _));
-        s.set(Expr::new_atom("-"), ScopeValue::FuncValue(&EVAL_SUB as &'static _));
-        s.set(Expr::new_atom("*"), ScopeValue::FuncValue(&EVAL_MUL as &'static _));
-        s.set(Expr::new_atom("/"), ScopeValue::FuncValue(&EVAL_DIV as &'static _));
-        s.set(Expr::new_atom("def"), ScopeValue::ExprValue(Expr::Int(1)));
+        s.set(Expr::new_atom("+"), ScopeValue::FuncValue(&EVAL_ADD));
+        s.set(Expr::new_atom("-"), ScopeValue::FuncValue(&EVAL_SUB));
+        s.set(Expr::new_atom("*"), ScopeValue::FuncValue(&EVAL_MUL));
+        s.set(Expr::new_atom("/"), ScopeValue::FuncValue(&EVAL_DIV));
+        s.set(Expr::new_atom("def"), ScopeValue::FuncValue(&EVAL_DEF));
     }
     //s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
     //    println!("lookup {:?}", expr);

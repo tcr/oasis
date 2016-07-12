@@ -9,9 +9,16 @@ pub Exprs: Vec<Box<Expr>> = { // (1)
 
 Expr: Box<Expr> = {
     "(" <Exprs> ")" => Box::new(Expr::SExpr(<>)),
+    "null" => Box::new(Expr::Null),
     Num => Box::new(Expr::Int(<>)),
-    r#""(?:[^"\\]|\\.)*""# => Box::new(Expr::Str(<>.to_owned())),
-    r#"'(?:[^'\\]|\\.)*'"# => Box::new(Expr::Str(<>.to_owned())),
+    r#""(?:[^"\\]|\\.)*""# => {
+      let val = <>;
+      Box::new(Expr::Str(val[1..val.len() - 1].to_owned()))
+    },
+    r#"'(?:[^'\\]|\\.)*'"# => {
+      let val = <>;
+      Box::new(Expr::Str(val[1..val.len() - 1].to_owned()))
+    },
     Term => Box::new(Expr::Atom(<>)),
 };
 

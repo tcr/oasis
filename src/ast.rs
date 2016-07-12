@@ -4,6 +4,7 @@ pub enum Expr {
     Atom(String),
     SExpr(Vec<Box<Expr>>),
     Str(String),
+    Null,
 }
 
 impl Expr {
