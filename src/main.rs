@@ -6,6 +6,8 @@ pub mod scope;
 
 use ast::*;
 use scope::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::env;
 
 fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
@@ -55,13 +57,28 @@ static EVAL_DEF: fn(ScopeRef, Vec<Expr>) -> Expr = eval_def;
 
 fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
-    let names = args.remove(0);
-    let s2 = Scope::new(Some(scope.clone()));
-    let closure = |scope, args| {
-        println!("called!");
-        Expr::Null
+    let names = if let Expr::SExpr(content) = args.remove(0) {
+        content
+    } else {
+        vec![]
     };
-    scope.borrow_mut().set(key, ScopeValue::DynFuncValue(Box::new(closure)));
+
+    let content = args;
+    let parent_scope = scope.clone();
+    let closure = Box::new(move |_, args: Vec<Expr>| {
+        let s2 = Scope::new(Some(parent_scope.clone()));
+        for (item, value) in names.iter().zip(args) {
+            s2.borrow_mut().set((**item).clone(), ScopeValue::ExprValue(value.clone()));
+        }
+
+        let mut res = Expr::Null;
+        for statement in content.iter() {
+            res = eval(s2.clone(), statement.clone(), eval_expr);
+        }
+        res
+    });
+
+    scope.borrow_mut().set(key, ScopeValue::DynFuncValue(Rc::new(RefCell::new(closure))));
     Expr::Null
 }
 

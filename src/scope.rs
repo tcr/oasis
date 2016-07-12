@@ -10,7 +10,7 @@ pub type ScopeRef = Rc<RefCell<Box<Scope>>>;
 pub enum ScopeValue {
     FuncValue(&'static Fn(ScopeRef, Vec<Expr>) -> Expr),
     MacroValue(&'static Fn(ScopeRef, Vec<Expr>) -> Expr),
-    DynFuncValue(Box<Fn(ScopeRef, Vec<Expr>) -> Expr>),
+    DynFuncValue(Rc<RefCell<Box<Fn(ScopeRef, Vec<Expr>) -> Expr>>>),
     ExprValue(Expr),
 }
 
@@ -54,16 +54,19 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Box<Expr>>) -> Expr {
 
     match x {
         Atom(..) => {
-            let (func, do_eval) = scope.borrow().lookup(&x, |value| {
+            let (func, dynfunc, do_eval) = scope.borrow().lookup(&x, |value| {
                 match value {
                     Some(&ScopeValue::FuncValue(func)) => {
-                        (func, true)
+                        (Some(func), None, true)
                     }
                     Some(&ScopeValue::MacroValue(func)) => {
-                        (func, false)
+                        (Some(func), None, false)
                     }
                     Some(&ScopeValue::ExprValue(ref value)) => {
                         panic!("Called uncallable value: {:?}", value);
+                    }
+                    Some(&ScopeValue::DynFuncValue(ref func)) => {
+                        (None, Some(func.clone()), true)
                     }
                     _ => {
                         panic!("Called value that doesn't exist");
@@ -80,7 +83,14 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Box<Expr>>) -> Expr {
                 })
                 .collect();
 
-            func(scope, args)
+            if let Some(func) = func {
+                func(scope, args)
+            } else if let Some(dynfunc) = dynfunc {
+                let call = dynfunc.borrow();
+                call(scope, args)
+            } else {
+                unreachable!();
+            }
         },
         _ => unreachable!(),
     }
