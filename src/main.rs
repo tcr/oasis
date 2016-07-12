@@ -3,16 +3,16 @@
 extern crate rand;
 extern crate strfmt;
 
-pub mod lisp;
-pub mod ast;
 #[macro_use] pub mod scope;
+pub mod ast;
+pub mod lisp;
 
 use ast::*;
-use scope::*;
-use std::io::{self, Read};
 use rand::Rng;
-use strfmt::strfmt;
+use scope::*;
 use std::collections::HashMap;
+use std::io::{self, Read};
+use strfmt::strfmt;
 
 fn macro_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
@@ -93,28 +93,28 @@ fn eval_sub(args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], args.iter().nth(1)) {
         (&Expr::Int(a), Some(&Expr::Int(b))) => a - b,
         (&Expr::Int(a), None) => -a,
-        _ => 0
+        _ => 0,
     })
 }
 
 fn eval_mul(args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a * b,
-        _ => 0
+        _ => 0,
     })
 }
 
 fn eval_div(args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a / b,
-        _ => 0
+        _ => 0,
     })
 }
 
 fn eval_bitshiftleft(args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a << b,
-        _ => 0
+        _ => 0,
     })
 }
 
@@ -237,7 +237,7 @@ fn run() -> io::Result<()> {
 
     // Uncomment to print final value.
     let _ = res;
-    //println!("{:?}", res);
+    // println!("{:?}", res);
 
     Ok(())
 }
