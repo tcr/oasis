@@ -53,6 +53,15 @@ fn eval_def(scope: &mut Scope, mut args: Vec<Expr>) -> Expr {
 
 static EVAL_DEF: fn(&mut Scope, Vec<Expr>) -> Expr = eval_def;
 
+fn eval_defn(scope: &mut Scope, mut args: Vec<Expr>) -> Expr {
+    let key = args.remove(0);
+    let names = args.remove(0);
+    scope.set(key, ScopeValue::ExprValue(value));
+    Expr::Null
+}
+
+static EVAL_DEFN: fn(&mut Scope, Vec<Expr>) -> Expr = eval_defn;
+
 fn main() {
     let content = env::args().nth(1).unwrap();
     let parse = lisp::parse_Exprs(&content).unwrap();
@@ -67,6 +76,7 @@ fn main() {
         s.set(Expr::new_atom("*"), ScopeValue::FuncValue(&EVAL_MUL));
         s.set(Expr::new_atom("/"), ScopeValue::FuncValue(&EVAL_DIV));
         s.set(Expr::new_atom("def"), ScopeValue::MacroValue(&EVAL_DEF));
+        s.set(Expr::new_atom("defn"), ScopeValue::MacroValue(&EVAL_DEFN));
     }
     //s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
     //    println!("lookup {:?}", expr);
