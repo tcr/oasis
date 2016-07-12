@@ -117,7 +117,7 @@ where F: Fn(ScopeRef, Expr, Vec<Expr>) -> Expr {
                 } else {
                     unreachable!("Cannot evaluate value {:?}", expr);
                 }
-            }).expect("Eval failed to find named value")
+            }).expect(&format!("Eval failed to find named value: {:?}", expr))
         },
         _ => expr,
     }

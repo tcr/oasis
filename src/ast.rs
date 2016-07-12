@@ -32,4 +32,12 @@ impl Expr {
             _ => 0,
         }
     }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            &Expr::Str(ref value) => value.clone(),
+            &Expr::Int(value) => format!("{}", value),
+            _ => "".to_string(),
+        }
+    }
 }

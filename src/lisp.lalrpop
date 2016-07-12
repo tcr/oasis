@@ -24,7 +24,7 @@ Expr: Expr = {
 };
 
 Term: String = {
-    r#"[^\d\s"';)\(]+"# => (<>).to_owned()
+    r#"[A-Za-z_?+*/.=<>-]+[0-9A-Za-z_?+*/.=<>-]*"# => (<>).to_owned()
 };
 
 Num: i32 = {

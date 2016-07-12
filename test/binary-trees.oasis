@@ -1,0 +1,58 @@
+; Based on http://benchmarksgame.alioth.debian.org/u64q/program.php?test=binarytrees&lang=clojure&id=2
+
+(def min-depth 4)
+
+(defn TreeNode (left right item) (vec left right item))
+(defn .left (tree) (index tree 0))
+(defn .right (tree) (index tree 1))
+(defn .item (tree) (index tree 2))
+
+(defn make-tree (item depth)
+  (if (= depth 0)
+    (TreeNode null null item)
+    (let (i2 (* 2 item)
+          ddec (- depth 1))
+      (TreeNode (make-tree (- i2 1) ddec) (make-tree i2 ddec) item))))
+
+(defn item-check (node)
+  (if (null? (.left node))
+    (.item node)
+    (- (+ (.item node)
+          (item-check (.left node)))
+       (item-check (.right node)))))
+
+(defn iterate-trees (mx mn d)
+  (let (iterations (<< 1 (+ mx mn (- d))))
+    (defn inner (result i)
+      (if (= i (+ iterations 1))
+        result
+        (inner (+ result
+                  (item-check (make-tree i d))
+                  (item-check (make-tree (- i) d)))
+          (+ i 1))))
+    (println "{0}\t trees of depth {1}\t check: {2}"
+            (* 2 iterations)
+            d
+            (inner 0 1))))
+
+(defn main (max-depth)
+  (let (stretch-depth (+ max-depth 1))
+    (let (tree (make-tree 0 stretch-depth)
+          check (item-check tree))
+      (println "stretch tree of depth {0}\t check: {1}" stretch-depth check))
+
+    (def long-lived-tree (make-tree 0 max-depth))
+    (defn inner (depth)
+      (iterate-trees max-depth min-depth depth)
+      (if (< (+ 2 depth) stretch-depth)
+        (inner (+ 2 depth))
+        null))
+
+    (inner min-depth)
+    (println "hey")
+    (println "long lived tree of depth {0}\t check: {1}"
+             max-depth (item-check long-lived-tree))))
+
+(main (+ 2 min-depth))
+
+; (make-tree 0 min-depth)

@@ -1,6 +1,7 @@
 // TODO https://github.com/ivanjovanovic/sicp/blob/master/2.3/2.3-binary-trees.scm
 
 extern crate rand;
+extern crate strfmt;
 
 pub mod lisp;
 pub mod ast;
@@ -10,6 +11,8 @@ use ast::*;
 use scope::*;
 use std::io::{self, Read};
 use rand::Rng;
+use strfmt::strfmt;
+use std::collections::HashMap;
 
 fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
@@ -19,8 +22,9 @@ fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
 }
 
 fn eval_sub(_: ScopeRef, args: Vec<Expr>) -> Expr {
-    Expr::Int(match (&args[0], &args[1]) {
-        (&Expr::Int(a), &Expr::Int(b)) => a - b,
+    Expr::Int(match (&args[0], args.iter().nth(1)) {
+        (&Expr::Int(a), Some(&Expr::Int(b))) => a - b,
+        (&Expr::Int(a), None) => -a,
         _ => 0
     })
 }
@@ -37,6 +41,35 @@ fn eval_div(_: ScopeRef, args: Vec<Expr>) -> Expr {
         (&Expr::Int(a), &Expr::Int(b)) => a / b,
         _ => 0
     })
+}
+
+fn eval_bitshiftleft(_: ScopeRef, args: Vec<Expr>) -> Expr {
+    Expr::Int(match (&args[0], &args[1]) {
+        (&Expr::Int(a), &Expr::Int(b)) => a << b,
+        _ => 0
+    })
+}
+
+fn eval_eq(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let a = args.remove(0);
+    let b = args.remove(0);
+
+    if a == b {
+        Expr::Int(1)
+    } else {
+        Expr::Int(0)
+    }
+}
+
+fn eval_le(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let a = args.remove(0);
+    let b = args.remove(0);
+
+    if a.as_int() < b.as_int() {
+        Expr::Int(1)
+    } else {
+        Expr::Int(0)
+    }
 }
 
 fn eval_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
@@ -100,8 +133,15 @@ fn eval_nullq(_: ScopeRef, args: Vec<Expr>) -> Expr {
     }
 }
 
-fn eval_println(_: ScopeRef, args: Vec<Expr>) -> Expr {
-    println!("{:?}", args);
+fn eval_println(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let fmt = args.remove(0).as_string();
+
+    let mut vars = HashMap::new();
+    for (i, value) in args.iter().enumerate() {
+        vars.insert(format!("{}", i), value.as_string());
+    }
+
+    println!("{}", strfmt(&fmt, &vars).unwrap());
     Expr::Null
 }
 
@@ -124,17 +164,6 @@ fn eval_if(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn eval_eq(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
-    let a = args.remove(0);
-    let b = args.remove(0);
-
-    if a == b {
-        Expr::Int(1)
-    } else {
-        Expr::Int(0)
-    }
-}
-
 fn eval_concat(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let mut list = args.remove(0);
     let add = args.remove(0);
@@ -148,6 +177,29 @@ fn eval_random(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
     let mut rng = rand::thread_rng();
     Expr::Int(rng.gen_range(0, n.as_int()))
+}
+
+fn eval_let(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let bindings = if let Expr::SExpr(content) = args.remove(0) {
+        content
+    } else {
+        vec![]
+    };
+    let content = args;
+
+    let s2 = Scope::new(Some(scope.clone()));
+    for win in bindings[..].chunks(2) {
+        let item = win[0].clone();
+        let value = win[1].clone();
+        let value = eval(s2.clone(), value, eval_expr);
+        s2.borrow_mut().set(item, ScopeValue::Expr(value));
+    }
+
+    let mut res = Expr::Null;
+    for statement in content.iter() {
+        res = eval(s2.clone(), statement.clone(), eval_expr);
+    }
+    res
 }
 
 fn main() {
@@ -167,6 +219,9 @@ fn run() -> io::Result<()> {
         s.set_atom("-", ScopeValue::Func(alloc!(eval_sub)));
         s.set_atom("*", ScopeValue::Func(alloc!(eval_mul)));
         s.set_atom("/", ScopeValue::Func(alloc!(eval_div)));
+        s.set_atom("<<", ScopeValue::Func(alloc!(eval_bitshiftleft)));
+        s.set_atom("=", ScopeValue::Func(alloc!(eval_eq)));
+        s.set_atom("<", ScopeValue::Func(alloc!(eval_le)));
         s.set_atom("def", ScopeValue::Macro(alloc!(eval_def)));
         s.set_atom("defn", ScopeValue::Macro(alloc!(eval_defn)));
         s.set_atom("vec", ScopeValue::Func(alloc!(eval_vec)));
@@ -176,9 +231,9 @@ fn run() -> io::Result<()> {
         s.set_atom("null?", ScopeValue::Func(alloc!(eval_nullq)));
         s.set_atom("println", ScopeValue::Func(alloc!(eval_println)));
         s.set_atom("if", ScopeValue::Macro(alloc!(eval_if)));
-        s.set_atom("=", ScopeValue::Func(alloc!(eval_eq)));
         s.set_atom("concat", ScopeValue::Func(alloc!(eval_concat)));
         s.set_atom("random", ScopeValue::Func(alloc!(eval_random)));
+        s.set_atom("let", ScopeValue::Macro(alloc!(eval_let)));
     }
 
     let mut res = Expr::Null;
