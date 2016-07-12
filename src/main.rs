@@ -90,6 +90,13 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
+fn eval_nullq(_: ScopeRef, args: Vec<Expr>) -> Expr {
+    match &args[0] {
+        &Expr::Null => Expr::Int(1),
+        _ => Expr::Int(0),
+    }
+}
+
 fn main() {
     let _ = run();
 }
@@ -113,6 +120,7 @@ fn run() -> io::Result<()> {
         s.set_atom("index", ScopeValue::Func(alloc!(eval_index)));
         s.set_atom("first", ScopeValue::Func(alloc!(eval_first)));
         s.set_atom("rest", ScopeValue::Func(alloc!(eval_rest)));
+        s.set_atom("null?", ScopeValue::Func(alloc!(eval_nullq)));
     }
 
     let mut res = Expr::Null;
