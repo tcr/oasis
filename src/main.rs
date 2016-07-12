@@ -38,12 +38,12 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let outer_ref = inner_ref.clone();
 
     let closure: Alloc<FuncFn> = alloc!(move |ctx: &mut Context, args: Vec<Expr>| {
-        // Check for LTO.
+        // Check for TCO.
         let fn_ptr = inner_ref.read().unwrap();
         let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
         if ctx.iter().position(|x| *x == fn_id).is_some() {
             // Return early with evaluated arguments.
-            return Expr::LTO(fn_id, args);
+            return Expr::TCO(fn_id, args);
         }
 
         // Otherwise, add to call stack and evaluate.
@@ -55,10 +55,15 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
             s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
         }
 
+        // Evaluate contents.
         let mut res = Expr::Null;
-        for statement in content.iter() {
-            res = eval(ctx, s2.clone(), statement.clone());
-        }
+        loop {
+            for statement in content.iter() {
+                res = eval(ctx, s2.clone(), statement.clone());
+            }
+
+            // Tail-call optimization.
+
         res
     });
 

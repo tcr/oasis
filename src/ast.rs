@@ -7,7 +7,7 @@ pub enum Expr {
     Atom(String),
     SExpr(Vec<Expr>),
     Str(String),
-    LTO(FuncFnId, Vec<Expr>),
+    TCO(FuncFnId, Vec<Expr>),
     Null,
 }
 
