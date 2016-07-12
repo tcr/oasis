@@ -6,7 +6,7 @@ pub mod ast;
 
 use ast::*;
 use scope::*;
-use std::env;
+use std::io::{self, Read};
 
 fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
@@ -53,6 +53,16 @@ fn eval_index(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     value.as_vec()[key.as_int() as usize].clone()
 }
 
+fn eval_first(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let value = args.remove(0);
+    value.as_vec()[0].clone()
+}
+
+fn eval_rest(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    args.remove(0);
+    Expr::SExpr(args)
+}
+
 fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let names = if let Expr::SExpr(content) = args.remove(0) {
@@ -81,7 +91,13 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
 }
 
 fn main() {
-    let content = env::args().nth(1).unwrap();
+    let _ = run();
+}
+
+fn run() -> io::Result<()> {
+    let mut content = String::new();
+    try!(io::stdin().read_to_string(&mut content));
+
     let parse = lisp::parse_Exprs(&content).unwrap();
 
     let s = Scope::new(None);
@@ -95,6 +111,8 @@ fn main() {
         s.set_atom("defn", ScopeValue::Macro(alloc!(eval_defn)));
         s.set_atom("vec", ScopeValue::Func(alloc!(eval_vec)));
         s.set_atom("index", ScopeValue::Func(alloc!(eval_index)));
+        s.set_atom("first", ScopeValue::Func(alloc!(eval_first)));
+        s.set_atom("rest", ScopeValue::Func(alloc!(eval_rest)));
     }
 
     let mut res = Expr::Int(-1);
@@ -103,4 +121,6 @@ fn main() {
     }
 
     println!("{:?}", res);
+
+    Ok(())
 }
