@@ -2,7 +2,7 @@
 
 pub mod lisp;
 pub mod ast;
-pub mod scope;
+#[macro_use] pub mod scope;
 
 use ast::*;
 use scope::*;
@@ -15,16 +15,12 @@ fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
     })
 }
 
-static EVAL_ADD: fn(ScopeRef, Vec<Expr>) -> Expr = eval_add;
-
 fn eval_sub(_: ScopeRef, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a - b,
         _ => 0
     })
 }
-
-static EVAL_SUB: fn(ScopeRef, Vec<Expr>) -> Expr = eval_sub;
 
 fn eval_mul(_: ScopeRef, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
@@ -33,16 +29,12 @@ fn eval_mul(_: ScopeRef, args: Vec<Expr>) -> Expr {
     })
 }
 
-static EVAL_MUL: fn(ScopeRef, Vec<Expr>) -> Expr = eval_mul;
-
 fn eval_div(_: ScopeRef, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a / b,
         _ => 0
     })
 }
-
-static EVAL_DIV: fn(ScopeRef, Vec<Expr>) -> Expr = eval_div;
 
 fn eval_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
@@ -51,21 +43,15 @@ fn eval_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
-static EVAL_DEF: fn(ScopeRef, Vec<Expr>) -> Expr = eval_def;
-
 fn eval_vec(_: ScopeRef, args: Vec<Expr>) -> Expr {
     Expr::SExpr(args)
 }
-
-static EVAL_VEC: fn(ScopeRef, Vec<Expr>) -> Expr = eval_vec;
 
 fn eval_index(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
     let key = args.remove(0);
     value.as_vec()[key.as_int() as usize].clone()
 }
-
-static EVAL_INDEX: fn(ScopeRef, Vec<Expr>) -> Expr = eval_index;
 
 fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
@@ -77,7 +63,7 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
     let content = args;
     let parent_scope = scope.clone();
-    let closure = Box::new(move |_, args: Vec<Expr>| {
+    let closure: Alloc<ExprFn> = alloc!(move |_, args: Vec<Expr>| {
         let s2 = Scope::new(Some(parent_scope.clone()));
         for (item, value) in names.iter().zip(args) {
             s2.borrow_mut().set((*item).clone(), ScopeValue::ExprValue(value.clone()));
@@ -90,11 +76,9 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
         res
     });
 
-    scope.borrow_mut().set(key, ScopeValue::DynFuncValue(alloc_box(closure)));
+    scope.borrow_mut().set(key, ScopeValue::FuncValue(closure));
     Expr::Null
 }
-
-static EVAL_DEFN: fn(ScopeRef, Vec<Expr>) -> Expr = eval_defn;
 
 fn main() {
     let content = env::args().nth(1).unwrap();
@@ -104,14 +88,14 @@ fn main() {
     {
         let mut s = s.borrow_mut();
         s.set(Expr::new_atom("true"), ScopeValue::ExprValue(Expr::Int(1)));
-        s.set(Expr::new_atom("+"), ScopeValue::FuncValue(&EVAL_ADD));
-        s.set(Expr::new_atom("-"), ScopeValue::FuncValue(&EVAL_SUB));
-        s.set(Expr::new_atom("*"), ScopeValue::FuncValue(&EVAL_MUL));
-        s.set(Expr::new_atom("/"), ScopeValue::FuncValue(&EVAL_DIV));
-        s.set(Expr::new_atom("def"), ScopeValue::MacroValue(&EVAL_DEF));
-        s.set(Expr::new_atom("defn"), ScopeValue::MacroValue(&EVAL_DEFN));
-        s.set(Expr::new_atom("vec"), ScopeValue::FuncValue(&EVAL_VEC));
-        s.set(Expr::new_atom("index"), ScopeValue::FuncValue(&EVAL_INDEX));
+        s.set(Expr::new_atom("+"), ScopeValue::new_fn(eval_add));
+        s.set(Expr::new_atom("-"), ScopeValue::new_fn(eval_sub));
+        s.set(Expr::new_atom("*"), ScopeValue::new_fn(eval_mul));
+        s.set(Expr::new_atom("/"), ScopeValue::new_fn(eval_div));
+        s.set(Expr::new_atom("def"), ScopeValue::new_macro(eval_def));
+        s.set(Expr::new_atom("defn"), ScopeValue::new_macro(eval_defn));
+        s.set(Expr::new_atom("vec"), ScopeValue::new_fn(eval_vec));
+        s.set(Expr::new_atom("index"), ScopeValue::new_fn(eval_index));
     }
 
     let mut res = Expr::Int(-1);

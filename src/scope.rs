@@ -6,22 +6,36 @@ use std::collections::HashMap;
 pub type Alloc<T> = Rc<RefCell<Box<T>>>;
 
 /// Allocate objects.
-pub fn alloc<T>(value: T) -> Alloc<T> {
-    Rc::new(RefCell::new(Box::new(value)))
+macro_rules! alloc {
+    ( $x:expr ) => {
+        {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+            Rc::new(RefCell::new(Box::new($x)))
+        }
+    };
 }
 
-/// Allocate unsized objects.
-pub fn alloc_box<T: ?Sized>(value: Box<T>) -> Alloc<T> {
-    Rc::new(RefCell::new(value))
-}
+pub type ExprFn = Fn(ScopeRef, Vec<Expr>) -> Expr;
 
 pub type ScopeRef = Alloc<Scope>;
 
 pub enum ScopeValue {
-    FuncValue(&'static Fn(ScopeRef, Vec<Expr>) -> Expr),
-    MacroValue(&'static Fn(ScopeRef, Vec<Expr>) -> Expr),
-    DynFuncValue(Alloc<Fn(ScopeRef, Vec<Expr>) -> Expr>),
+    FuncValue(Alloc<Fn(ScopeRef, Vec<Expr>) -> Expr>),
+    MacroValue(Alloc<Fn(ScopeRef, Vec<Expr>) -> Expr>),
     ExprValue(Expr),
+}
+
+impl ScopeValue {
+    pub fn new_fn<F>(f: F) -> ScopeValue
+    where F: Fn(ScopeRef, Vec<Expr>) -> Expr + 'static {
+        ScopeValue::FuncValue(alloc!(f))
+    }
+
+    pub fn new_macro<F>(f: F) -> ScopeValue
+    where F: Fn(ScopeRef, Vec<Expr>) -> Expr + 'static {
+        ScopeValue::MacroValue(alloc!(f))
+    }
 }
 
 pub struct Scope {
@@ -31,7 +45,7 @@ pub struct Scope {
 
 impl Scope {
     pub fn new(parent: Option<ScopeRef>) -> ScopeRef {
-        alloc(Scope {
+        alloc!(Scope {
             parent: parent,
             scope: HashMap::new()
         })
@@ -64,19 +78,16 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
 
     match x {
         Atom(..) => {
-            let (func, dynfunc, do_eval) = scope.borrow().lookup(&x, |value| {
+            let (func, do_eval) = scope.borrow().lookup(&x, |value| {
                 match value {
-                    Some(&ScopeValue::FuncValue(func)) => {
-                        (Some(func), None, true)
+                    Some(&ScopeValue::FuncValue(ref func)) => {
+                        (func.clone(), true)
                     }
-                    Some(&ScopeValue::MacroValue(func)) => {
-                        (Some(func), None, false)
+                    Some(&ScopeValue::MacroValue(ref func)) => {
+                        (func.clone(), false)
                     }
                     Some(&ScopeValue::ExprValue(ref value)) => {
                         panic!("Called uncallable value: {:?}", value);
-                    }
-                    Some(&ScopeValue::DynFuncValue(ref func)) => {
-                        (None, Some(func.clone()), true)
                     }
                     _ => {
                         panic!("Called value that doesn't exist");
@@ -93,14 +104,8 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
                 })
                 .collect();
 
-            if let Some(func) = func {
-                func(scope, args)
-            } else if let Some(dynfunc) = dynfunc {
-                let call = dynfunc.borrow();
-                call(scope, args)
-            } else {
-                unreachable!();
-            }
+            let call = func.borrow();
+            call(scope, args)
         },
         _ => unreachable!(),
     }
