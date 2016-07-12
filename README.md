@@ -12,6 +12,8 @@ or e.g.
 cat test/binary-trees.oasis | cargo run --release
 ```
 
+**TODO:** Tail call recursion. Please help.
+
 ## License
 
 MIT and Apache-2.0
