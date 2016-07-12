@@ -55,6 +55,20 @@ fn eval_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
 static EVAL_DEF: fn(ScopeRef, Vec<Expr>) -> Expr = eval_def;
 
+fn eval_vec(_: ScopeRef, args: Vec<Expr>) -> Expr {
+    Expr::SExpr(args)
+}
+
+static EVAL_VEC: fn(ScopeRef, Vec<Expr>) -> Expr = eval_vec;
+
+fn eval_index(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let value = args.remove(0);
+    let key = args.remove(0);
+    value.as_vec()[key.as_int() as usize].clone()
+}
+
+static EVAL_INDEX: fn(ScopeRef, Vec<Expr>) -> Expr = eval_index;
+
 fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let names = if let Expr::SExpr(content) = args.remove(0) {
@@ -68,7 +82,7 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let closure = Box::new(move |_, args: Vec<Expr>| {
         let s2 = Scope::new(Some(parent_scope.clone()));
         for (item, value) in names.iter().zip(args) {
-            s2.borrow_mut().set((**item).clone(), ScopeValue::ExprValue(value.clone()));
+            s2.borrow_mut().set((*item).clone(), ScopeValue::ExprValue(value.clone()));
         }
 
         let mut res = Expr::Null;
@@ -99,6 +113,8 @@ fn main() {
         s.set(Expr::new_atom("/"), ScopeValue::FuncValue(&EVAL_DIV));
         s.set(Expr::new_atom("def"), ScopeValue::MacroValue(&EVAL_DEF));
         s.set(Expr::new_atom("defn"), ScopeValue::MacroValue(&EVAL_DEFN));
+        s.set(Expr::new_atom("vec"), ScopeValue::FuncValue(&EVAL_VEC));
+        s.set(Expr::new_atom("index"), ScopeValue::FuncValue(&EVAL_INDEX));
     }
     //s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
     //    println!("lookup {:?}", expr);
@@ -106,7 +122,7 @@ fn main() {
 
     let mut res = Expr::Int(-1);
     for statement in parse {
-        res = eval(s2.clone(), *statement, eval_expr);
+        res = eval(s2.clone(), statement, eval_expr);
     }
 
     println!("{:?}", res);

@@ -2,7 +2,7 @@
 pub enum Expr {
     Int(i32),
     Atom(String),
-    SExpr(Vec<Box<Expr>>),
+    SExpr(Vec<Expr>),
     Str(String),
     Null,
 }
@@ -10,5 +10,19 @@ pub enum Expr {
 impl Expr {
     pub fn new_atom(key: &str) -> Expr {
         Expr::Atom(key.to_owned())
+    }
+
+    pub fn as_vec<'a>(&'a self) -> &'a Vec<Expr> {
+        match self {
+            &Expr::SExpr(ref inner) => inner,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_int(&self) -> i32 {
+        match self {
+            &Expr::Int(value) => value,
+            _ => 0,
+        }
     }
 }
