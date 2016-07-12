@@ -19,6 +19,13 @@ impl Expr {
         }
     }
 
+    pub fn as_vec_mut<'a>(&'a mut self) -> &'a mut Vec<Expr> {
+        match self {
+            &mut Expr::SExpr(ref mut inner) => inner,
+            _ => unreachable!(),
+        }
+    }
+
     pub fn as_int(&self) -> i32 {
         match self {
             &Expr::Int(value) => value,

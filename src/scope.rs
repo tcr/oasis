@@ -85,7 +85,7 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
                         panic!("Called value that doesn't exist");
                     }
                 }
-            }).expect("Could not eval unknown atom");
+            }).expect(&format!("Could not eval unknown atom {:?}", x));
 
             let args: Vec<Expr> = args
                 .into_iter()
