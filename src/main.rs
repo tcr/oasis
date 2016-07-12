@@ -73,7 +73,7 @@ fn eval_le(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
 fn eval_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
-    let value = eval(scope.clone(), args.remove(0), eval_expr);
+    let value = eval(scope.clone(), args.remove(0));
     scope.borrow_mut().set(key, ScopeValue::Expr(value));
     Expr::Null
 }
@@ -116,7 +116,7 @@ fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
         let mut res = Expr::Null;
         for statement in content.iter() {
-            res = eval(s2.clone(), statement.clone(), eval_expr);
+            res = eval(s2.clone(), statement.clone());
         }
         res
     });
@@ -156,10 +156,10 @@ fn eval_if(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let then_val = args.remove(0);
     let else_val = args.remove(0);
 
-    if truthy(&eval(scope.clone(), if_val, eval_expr)) {
-        eval(scope.clone(), then_val, eval_expr)
+    if truthy(&eval(scope.clone(), if_val)) {
+        eval(scope.clone(), then_val)
     } else {
-        eval(scope.clone(), else_val, eval_expr)
+        eval(scope.clone(), else_val)
     }
 }
 
@@ -190,13 +190,13 @@ fn eval_let(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     for win in bindings[..].chunks(2) {
         let item = win[0].clone();
         let value = win[1].clone();
-        let value = eval(s2.clone(), value, eval_expr);
+        let value = eval(s2.clone(), value);
         s2.borrow_mut().set(item, ScopeValue::Expr(value));
     }
 
     let mut res = Expr::Null;
     for statement in content.iter() {
-        res = eval(s2.clone(), statement.clone(), eval_expr);
+        res = eval(s2.clone(), statement.clone());
     }
     res
 }
@@ -237,7 +237,7 @@ fn run() -> io::Result<()> {
 
     let mut res = Expr::Null;
     for statement in parse {
-        res = eval(s.clone(), statement, eval_expr);
+        res = eval(s.clone(), statement);
     }
 
     // Uncomment to print final value.

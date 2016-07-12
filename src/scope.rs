@@ -90,7 +90,7 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
             let args: Vec<Expr> = args
                 .into_iter()
                 .map(|x| if do_eval {
-                    eval(scope.clone(), x, eval_expr)
+                    eval(scope.clone(), x)
                 } else {
                     x
                 })
@@ -103,12 +103,11 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
     }
 }
 
-pub fn eval<F>(scope: ScopeRef, expr: Expr, inner: F) -> Expr
-where F: Fn(ScopeRef, Expr, Vec<Expr>) -> Expr {
+pub fn eval(scope: ScopeRef, expr: Expr) -> Expr {
     match expr {
         Expr::SExpr(mut args) => {
             let term = args.remove(0);
-            inner(scope, term, args)
+            eval_expr(scope, term, args)
         },
         Expr::Atom(..) => {
             scope.borrow().lookup(&expr, |x| {
