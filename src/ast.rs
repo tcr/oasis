@@ -26,6 +26,13 @@ impl Expr {
         }
     }
 
+    pub fn as_bool(&self) -> bool {
+        match self {
+            &Expr::Int(0) | &Expr::Null => false,
+            _ => true,
+        }
+    }
+
     pub fn as_int(&self) -> i32 {
         match self {
             &Expr::Int(value) => value,

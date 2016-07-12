@@ -14,6 +14,75 @@ use rand::Rng;
 use strfmt::strfmt;
 use std::collections::HashMap;
 
+fn macro_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let key = args.remove(0);
+    let value = eval(scope.clone(), args.remove(0));
+    scope.borrow_mut().set(key, ScopeValue::Expr(value));
+    Expr::Null
+}
+
+fn macro_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let key = args.remove(0);
+    let names = if let Expr::SExpr(content) = args.remove(0) {
+        content
+    } else {
+        vec![]
+    };
+
+    let content = args;
+    let parent_scope = scope.clone();
+    let closure: Alloc<ExprFn> = alloc!(move |_, args: Vec<Expr>| {
+        let s2 = Scope::new(Some(parent_scope.clone()));
+        for (item, value) in names.iter().zip(args) {
+            s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
+        }
+
+        let mut res = Expr::Null;
+        for statement in content.iter() {
+            res = eval(s2.clone(), statement.clone());
+        }
+        res
+    });
+
+    scope.borrow_mut().set(key, ScopeValue::Func(closure));
+    Expr::Null
+}
+
+fn macro_if(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let if_val = args.remove(0);
+    let then_val = args.remove(0);
+    let else_val = args.remove(0);
+
+    if eval(scope.clone(), if_val).as_bool() {
+        eval(scope.clone(), then_val)
+    } else {
+        eval(scope.clone(), else_val)
+    }
+}
+
+fn macro_let(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+    let bindings = if let Expr::SExpr(content) = args.remove(0) {
+        content
+    } else {
+        vec![]
+    };
+    let content = args;
+
+    let s2 = Scope::new(Some(scope.clone()));
+    for win in bindings[..].chunks(2) {
+        let item = win[0].clone();
+        let value = win[1].clone();
+        let value = eval(s2.clone(), value);
+        s2.borrow_mut().set(item, ScopeValue::Expr(value));
+    }
+
+    let mut res = Expr::Null;
+    for statement in content.iter() {
+        res = eval(s2.clone(), statement.clone());
+    }
+    res
+}
+
 fn eval_add(_: ScopeRef, args: Vec<Expr>) -> Expr {
     Expr::Int(args.iter()
         .map(|x| x.as_int())
@@ -71,13 +140,6 @@ fn eval_le(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn eval_def(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
-    let key = args.remove(0);
-    let value = eval(scope.clone(), args.remove(0));
-    scope.borrow_mut().set(key, ScopeValue::Expr(value));
-    Expr::Null
-}
-
 fn eval_vec(_: ScopeRef, args: Vec<Expr>) -> Expr {
     Expr::SExpr(args)
 }
@@ -96,33 +158,6 @@ fn eval_first(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
 fn eval_rest(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
     Expr::SExpr(args)
-}
-
-fn eval_defn(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
-    let key = args.remove(0);
-    let names = if let Expr::SExpr(content) = args.remove(0) {
-        content
-    } else {
-        vec![]
-    };
-
-    let content = args;
-    let parent_scope = scope.clone();
-    let closure: Alloc<ExprFn> = alloc!(move |_, args: Vec<Expr>| {
-        let s2 = Scope::new(Some(parent_scope.clone()));
-        for (item, value) in names.iter().zip(args) {
-            s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
-        }
-
-        let mut res = Expr::Null;
-        for statement in content.iter() {
-            res = eval(s2.clone(), statement.clone());
-        }
-        res
-    });
-
-    scope.borrow_mut().set(key, ScopeValue::Func(closure));
-    Expr::Null
 }
 
 fn eval_nullq(_: ScopeRef, args: Vec<Expr>) -> Expr {
@@ -144,25 +179,6 @@ fn eval_println(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
-fn truthy(expr: &Expr) -> bool {
-    match expr {
-        &Expr::Int(0) | &Expr::Null => false,
-        _ => true,
-    }
-}
-
-fn eval_if(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
-    let if_val = args.remove(0);
-    let then_val = args.remove(0);
-    let else_val = args.remove(0);
-
-    if truthy(&eval(scope.clone(), if_val)) {
-        eval(scope.clone(), then_val)
-    } else {
-        eval(scope.clone(), else_val)
-    }
-}
-
 fn eval_concat(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let mut list = args.remove(0);
     let add = args.remove(0);
@@ -176,29 +192,6 @@ fn eval_random(_: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
     let mut rng = rand::thread_rng();
     Expr::Int(rng.gen_range(0, n.as_int()))
-}
-
-fn eval_let(scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
-    let bindings = if let Expr::SExpr(content) = args.remove(0) {
-        content
-    } else {
-        vec![]
-    };
-    let content = args;
-
-    let s2 = Scope::new(Some(scope.clone()));
-    for win in bindings[..].chunks(2) {
-        let item = win[0].clone();
-        let value = win[1].clone();
-        let value = eval(s2.clone(), value);
-        s2.borrow_mut().set(item, ScopeValue::Expr(value));
-    }
-
-    let mut res = Expr::Null;
-    for statement in content.iter() {
-        res = eval(s2.clone(), statement.clone());
-    }
-    res
 }
 
 fn main() {
@@ -215,10 +208,10 @@ fn run() -> io::Result<()> {
     {
         let mut s = s.borrow_mut();
 
-        s.set_atom("def", ScopeValue::Macro(alloc!(eval_def)));
-        s.set_atom("defn", ScopeValue::Macro(alloc!(eval_defn)));
-        s.set_atom("if", ScopeValue::Macro(alloc!(eval_if)));
-        s.set_atom("let", ScopeValue::Macro(alloc!(eval_let)));
+        s.set_atom("def", ScopeValue::Macro(alloc!(macro_def)));
+        s.set_atom("defn", ScopeValue::Macro(alloc!(macro_defn)));
+        s.set_atom("if", ScopeValue::Macro(alloc!(macro_if)));
+        s.set_atom("let", ScopeValue::Macro(alloc!(macro_let)));
 
         s.set_atom("+", ScopeValue::Func(alloc!(eval_add)));
         s.set_atom("-", ScopeValue::Func(alloc!(eval_sub)));
