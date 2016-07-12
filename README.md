@@ -3,10 +3,8 @@
 LISP in Rust using LALRPOP and some other things.
 
 ```
-cargo run -- "(+ (* 22 44) 66)"
+cargo run -- "(def hello 2) (+ 1 hello)"
 ```
-
-Supports just arithmetic operators for now.
 
 ## License
 

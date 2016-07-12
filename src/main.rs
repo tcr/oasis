@@ -8,54 +8,50 @@ use ast::*;
 use scope::*;
 use std::env;
 
-fn eval_add(_: &mut Scope, a: Expr, b: Expr) -> Expr {
-    Expr::Int(match (a, b) {
-        (Expr::Int(a), Expr::Int(b)) => a + b,
+fn eval_add(_: &mut Scope, args: Vec<Expr>) -> Expr {
+    Expr::Int(match (&args[0], &args[1]) {
+        (&Expr::Int(a), &Expr::Int(b)) => a + b,
         _ => 0
     })
 }
 
-static EVAL_ADD: fn(&mut Scope, Expr, Expr) -> Expr = eval_add;
+static EVAL_ADD: fn(&mut Scope, Vec<Expr>) -> Expr = eval_add;
 
-fn eval_sub(_: &mut Scope, a: Expr, b: Expr) -> Expr {
-    Expr::Int(match (a, b) {
-        (Expr::Int(a), Expr::Int(b)) => a - b,
+fn eval_sub(_: &mut Scope, args: Vec<Expr>) -> Expr {
+    Expr::Int(match (&args[0], &args[1]) {
+        (&Expr::Int(a), &Expr::Int(b)) => a - b,
         _ => 0
     })
 }
 
-static EVAL_SUB: fn(&mut Scope, Expr, Expr) -> Expr = eval_sub;
+static EVAL_SUB: fn(&mut Scope, Vec<Expr>) -> Expr = eval_sub;
 
-fn eval_mul(_: &mut Scope, a: Expr, b: Expr) -> Expr {
-    Expr::Int(match (a, b) {
-        (Expr::Int(a), Expr::Int(b)) => a * b,
+fn eval_mul(_: &mut Scope, args: Vec<Expr>) -> Expr {
+    Expr::Int(match (&args[0], &args[1]) {
+        (&Expr::Int(a), &Expr::Int(b)) => a * b,
         _ => 0
     })
 }
 
-static EVAL_MUL: fn(&mut Scope, Expr, Expr) -> Expr = eval_mul;
+static EVAL_MUL: fn(&mut Scope, Vec<Expr>) -> Expr = eval_mul;
 
-fn eval_div(_: &mut Scope, a: Expr, b: Expr) -> Expr {
-    Expr::Int(match (a, b) {
-        (Expr::Int(a), Expr::Int(b)) => a / b,
+fn eval_div(_: &mut Scope, args: Vec<Expr>) -> Expr {
+    Expr::Int(match (&args[0], &args[1]) {
+        (&Expr::Int(a), &Expr::Int(b)) => a / b,
         _ => 0
     })
 }
 
-static EVAL_DIV: fn(&mut Scope, Expr, Expr) -> Expr = eval_div;
+static EVAL_DIV: fn(&mut Scope, Vec<Expr>) -> Expr = eval_div;
 
-fn eval_def(scope: &mut Scope, a: Expr, b: Expr) -> Expr {
-    match a {
-        Expr::Str(key) => {
-            println!("way {:?}", key);
-            scope.set(Expr::Atom(key), ScopeValue::ExprValue(b));
-        }
-        _ => unreachable!("Dont do that")
-    }
+fn eval_def(scope: &mut Scope, mut args: Vec<Expr>) -> Expr {
+    let key = args.remove(0);
+    let value = args.remove(0);
+    scope.set(key, ScopeValue::ExprValue(value));
     Expr::Null
 }
 
-static EVAL_DEF: fn(&mut Scope, Expr, Expr) -> Expr = eval_def;
+static EVAL_DEF: fn(&mut Scope, Vec<Expr>) -> Expr = eval_def;
 
 fn main() {
     let content = env::args().nth(1).unwrap();
@@ -70,7 +66,7 @@ fn main() {
         s.set(Expr::new_atom("-"), ScopeValue::FuncValue(&EVAL_SUB));
         s.set(Expr::new_atom("*"), ScopeValue::FuncValue(&EVAL_MUL));
         s.set(Expr::new_atom("/"), ScopeValue::FuncValue(&EVAL_DIV));
-        s.set(Expr::new_atom("def"), ScopeValue::FuncValue(&EVAL_DEF));
+        s.set(Expr::new_atom("def"), ScopeValue::MacroValue(&EVAL_DEF));
     }
     //s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
     //    println!("lookup {:?}", expr);

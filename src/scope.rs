@@ -7,7 +7,8 @@ use std::collections::HashMap;
 
 #[derive(Clone)]
 pub enum ScopeValue {
-    FuncValue(&'static Fn(&mut Scope, Expr, Expr) -> Expr),
+    FuncValue(&'static Fn(&mut Scope, Vec<Expr>) -> Expr),
+    MacroValue(&'static Fn(&mut Scope, Vec<Expr>) -> Expr),
     ExprValue(Expr),
 }
 
@@ -48,28 +49,37 @@ impl Scope {
 
 pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
     use ast::Expr::*;
-    let mut args: Vec<Expr> = args
-        .into_iter()
-        .map(|x| scope.eval(*x, eval_expr))
-        .collect();
 
     match x {
         Atom(..) => {
-            let (func, a, b) = scope.lookup(&x, move |value| {
-                match value {
-                    Some(&ScopeValue::FuncValue(func)) => {
-                        (func, args.remove(0), args.remove(0))
-                    }
-                    Some(&ScopeValue::ExprValue(ref value)) => {
-                        panic!("Called uncallable value: {:?}", value);
-                    }
-                    None => {
-                        panic!("Called value that doesn't exist");
-                    }
-                }
-            }).unwrap();
+            let value: Option<ScopeValue> = scope.lookup(&x, |value| {
+                value.unwrap().clone()
+            });
 
-            func(scope, a, b)
+            match value {
+                Some(ScopeValue::FuncValue(func)) => {
+                    let args: Vec<Expr> = args
+                        .into_iter()
+                        .map(|x| scope.eval(*x, eval_expr))
+                        .collect();
+
+                    func(scope, args)
+                }
+                Some(ScopeValue::MacroValue(func)) => {
+                    let args: Vec<Expr> = args
+                        .into_iter()
+                        .map(|x| *x)
+                        .collect();
+
+                    func(scope, args)
+                }
+                Some(ScopeValue::ExprValue(ref value)) => {
+                    panic!("Called uncallable value: {:?}", value);
+                }
+                None => {
+                    panic!("Called value that doesn't exist");
+                }
+            }
         },
         _ => unreachable!(),
     }
