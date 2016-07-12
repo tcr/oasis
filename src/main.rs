@@ -214,6 +214,12 @@ fn run() -> io::Result<()> {
     let s = Scope::new(None);
     {
         let mut s = s.borrow_mut();
+
+        s.set_atom("def", ScopeValue::Macro(alloc!(eval_def)));
+        s.set_atom("defn", ScopeValue::Macro(alloc!(eval_defn)));
+        s.set_atom("if", ScopeValue::Macro(alloc!(eval_if)));
+        s.set_atom("let", ScopeValue::Macro(alloc!(eval_let)));
+
         s.set_atom("+", ScopeValue::Func(alloc!(eval_add)));
         s.set_atom("-", ScopeValue::Func(alloc!(eval_sub)));
         s.set_atom("*", ScopeValue::Func(alloc!(eval_mul)));
@@ -221,18 +227,14 @@ fn run() -> io::Result<()> {
         s.set_atom("<<", ScopeValue::Func(alloc!(eval_bitshiftleft)));
         s.set_atom("=", ScopeValue::Func(alloc!(eval_eq)));
         s.set_atom("<", ScopeValue::Func(alloc!(eval_le)));
-        s.set_atom("def", ScopeValue::Macro(alloc!(eval_def)));
-        s.set_atom("defn", ScopeValue::Macro(alloc!(eval_defn)));
         s.set_atom("vec", ScopeValue::Func(alloc!(eval_vec)));
         s.set_atom("index", ScopeValue::Func(alloc!(eval_index)));
         s.set_atom("first", ScopeValue::Func(alloc!(eval_first)));
         s.set_atom("rest", ScopeValue::Func(alloc!(eval_rest)));
         s.set_atom("null?", ScopeValue::Func(alloc!(eval_nullq)));
         s.set_atom("println", ScopeValue::Func(alloc!(eval_println)));
-        s.set_atom("if", ScopeValue::Macro(alloc!(eval_if)));
         s.set_atom("concat", ScopeValue::Func(alloc!(eval_concat)));
         s.set_atom("random", ScopeValue::Func(alloc!(eval_random)));
-        s.set_atom("let", ScopeValue::Macro(alloc!(eval_let)));
     }
 
     let mut res = Expr::Null;
