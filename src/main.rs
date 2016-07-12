@@ -103,7 +103,6 @@ fn main() {
     let parse = lisp::parse_Exprs(&content).unwrap();
 
     let s = Scope::new(None);
-    let s2 = Scope::new(Some(s.clone()));
     {
         let mut s = s.borrow_mut();
         s.set(Expr::new_atom("true"), ScopeValue::ExprValue(Expr::Int(1)));
@@ -116,13 +115,10 @@ fn main() {
         s.set(Expr::new_atom("vec"), ScopeValue::FuncValue(&EVAL_VEC));
         s.set(Expr::new_atom("index"), ScopeValue::FuncValue(&EVAL_INDEX));
     }
-    //s2.borrow().lookup(&Expr::Atom("true".to_owned()), |expr| {
-    //    println!("lookup {:?}", expr);
-    //});
 
     let mut res = Expr::Int(-1);
     for statement in parse {
-        res = eval(s2.clone(), statement, eval_expr);
+        res = eval(s.clone(), statement, eval_expr);
     }
 
     println!("{:?}", res);
