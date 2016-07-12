@@ -1,48 +1,14 @@
-; Based on https://github.com/ivanjovanovic/sicp/blob/master/2.3/2.3-binary-trees.scm
+; Based on http://benchmarksgame.alioth.debian.org/u64q/program.php?test=binarytrees&lang=clojure&id=2
 
-(defn make-tree (entry left right) (vec entry left right))
-(defn entry (tree) (index tree 0))
-(defn left-branch (tree) (index tree 1))
-(defn right-branch (tree) (index tree 2))
+(def min-depth 4)
 
-(defn element-of-set? (x set)
-  (cond ((null? set) false)
-        ((= x (entry set)) true)
-        ((< x (entry set)) (element-of-set? x (left-branch set)))
-        ((> x (entry set)) (element-of-set? x (right-branch set)))))
+(defn TreeNode (left right item) (vec left right item))
 
+(defn make-tree (item depth)
+  (if (= depth 0)
+    (TreeNode nil nil item)
+    (let (i2 (* 2 item)
+          ddec (- depth 1))
+      (TreeNode (make-tree (- i2 1) ddec) (make-tree i2 ddec) item))))
 
-; adding a new element of the set
-(defn adjoin-set (x set)
-  (cond ((null? set) (make-tree x '() '()))
-        ((= x (entry set)) set)
-        ((< x (entry set))
-         (make-tree (entry set)
-                    (adjoin-set x (left-branch set))
-                    (right-branch set)))
-        ((> x (entry set))
-         (make-tree (entry set)
-                    (left-branch set)
-                    (adjoin-set x (right-branch set))))))
-
-
-; couple of helper methods to generate random numerical trees for testing.
-(defn random-list (n)
-  (defn inner (i random-list)
-    (if (= i n)
-      random-list
-      (inner (+ i 1) (concat random-list (random n)))))
-  (inner 0 (vec)))
-
-(println (random-list 10))
-
-(defn random-tree (n)
-  (do ((tree-elements (random-list n) (cdr tree-elements))
-       (random-tree
-         ()
-         ((lambda (x) (if (element-of-set? x random-tree)
-                       random-tree
-                       (adjoin-set x random-tree))) (car tree-elements))))
-    ((null? tree-elements) random-tree)))
-
-; (println (random-tree 100))
+(make-tree 0 min-depth)
