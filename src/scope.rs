@@ -23,9 +23,6 @@ pub type ScopeRef = Alloc<Scope>;
 
 pub type Context = Vec<FuncFnId>;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FuncFnId(String);
-
 pub fn create_callstack() -> Context {
     vec![]
 }

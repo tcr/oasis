@@ -38,14 +38,22 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let outer_ref = inner_ref.clone();
 
     let closure: Alloc<FuncFn> = alloc!(move |ctx: &mut Context, args: Vec<Expr>| {
+        // Check for LTO.
+        let fn_ptr = inner_ref.read().unwrap();
+        let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
+        if ctx.iter().position(|x| *x == fn_id).is_some() {
+            // Return early with evaluated arguments.
+            return Expr::LTO(fn_id, args);
+        }
+
+        // Otherwise, add to call stack and evaluate.
+        ctx.push(fn_id);
+
+        // Create inner function bindings.
         let s2 = Scope::new(Some(parent_scope.clone()));
         for (item, value) in names.iter().zip(args) {
             s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
         }
-
-        // Add to call stack.
-        let fn_ptr = inner_ref.read().unwrap();
-        ctx.push(fn_ptr.clone().expect("No FunFnId for this function."));
 
         let mut res = Expr::Null;
         for statement in content.iter() {
