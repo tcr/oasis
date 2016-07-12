@@ -5,10 +5,10 @@ use std::collections::HashMap;
 
 // Switch to Funcs in Scope
 
-#[derive(Clone)]
 pub enum ScopeValue {
     FuncValue(&'static Fn(&mut Scope, Vec<Expr>) -> Expr),
     MacroValue(&'static Fn(&mut Scope, Vec<Expr>) -> Expr),
+    DynFuncValue(Vec<Box<Fn(&mut Scope, Vec<Expr>) -> Expr>>),
     ExprValue(Expr),
 }
 
@@ -52,34 +52,29 @@ pub fn eval_expr(scope: &mut Scope, x: Expr, args: Vec<Box<Expr>>) -> Expr {
 
     match x {
         Atom(..) => {
-            let value: Option<ScopeValue> = scope.lookup(&x, |value| {
-                value.unwrap().clone()
-            });
+            let (func, do_eval) = scope.lookup(&x, |value| {
+                match value {
+                    Some(&ScopeValue::FuncValue(func)) => {
+                        (func, true)
+                    }
+                    Some(&ScopeValue::MacroValue(func)) => {
+                        (func, false)
+                    }
+                    Some(&ScopeValue::ExprValue(ref value)) => {
+                        panic!("Called uncallable value: {:?}", value);
+                    }
+                    _ => {
+                        panic!("Called value that doesn't exist");
+                    }
+                }
+            }).expect("Could not eval unknown atom");
 
-            match value {
-                Some(ScopeValue::FuncValue(func)) => {
-                    let args: Vec<Expr> = args
-                        .into_iter()
-                        .map(|x| scope.eval(*x, eval_expr))
-                        .collect();
+            let args: Vec<Expr> = args
+                .into_iter()
+                .map(|x| if do_eval { scope.eval(*x, eval_expr) } else { *x })
+                .collect();
 
-                    func(scope, args)
-                }
-                Some(ScopeValue::MacroValue(func)) => {
-                    let args: Vec<Expr> = args
-                        .into_iter()
-                        .map(|x| *x)
-                        .collect();
-
-                    func(scope, args)
-                }
-                Some(ScopeValue::ExprValue(ref value)) => {
-                    panic!("Called uncallable value: {:?}", value);
-                }
-                None => {
-                    panic!("Called value that doesn't exist");
-                }
-            }
+            func(scope, args)
         },
         _ => unreachable!(),
     }
@@ -94,13 +89,13 @@ impl Scope {
                 inner(self, *term, args)
             },
             Expr::Atom(..) => {
-                if let Some(ScopeValue::ExprValue(inner)) = self.lookup(&expr, |x| {
-                    x.expect("Eval failed to find named value").clone()
-                }) {
-                    inner
-                } else {
-                    unreachable!("Cannot evaluate value {:?}", expr);
-                }
+                self.lookup(&expr, |x| {
+                    if let Some(&ScopeValue::ExprValue(ref inner)) = x {
+                        inner.clone()
+                    } else {
+                        unreachable!("Cannot evaluate value {:?}", expr);
+                    }
+                }).expect("Eval failed to find named value")
             },
             _ => expr,
         }
