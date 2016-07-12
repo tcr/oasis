@@ -19,11 +19,12 @@ Expr: Expr = {
       let val = <>;
       Expr::Str(val[1..val.len() - 1].to_owned())
     },
+    r";[^;\n\r]*" => Expr::Null,
     Term => Expr::Atom(<>),
 };
 
 Term: String = {
-    r#"[^\d\s"')\(]+"# => (<>).to_owned()
+    r#"[^\d\s"';)\(]+"# => (<>).to_owned()
 };
 
 Num: i32 = {
