@@ -16,10 +16,21 @@ macro_rules! alloc {
     };
 }
 
-pub type FuncFn = Fn(Vec<Expr>) -> Expr;
-pub type MacroFn = Fn(ScopeRef, Vec<Expr>) -> Expr;
+pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
+pub type MacroFn = Fn(&mut Context, ScopeRef, Vec<Expr>) -> Expr;
 
 pub type ScopeRef = Alloc<Scope>;
+
+pub type Context = Vec<(FuncFnId, bool)>;
+
+pub fn create_callstack() -> Context {
+    vec![]
+}
+
+pub fn funcfn_id(closure: &Alloc<FuncFn>) -> FuncFnId {
+    let ref boxed_fn: Box<FuncFn> = *closure.borrow();
+    FuncFnId(format!("{:p}", &*boxed_fn))
+}
 
 pub enum ScopeValue {
     Func(Alloc<FuncFn>),
@@ -63,7 +74,7 @@ impl Scope {
     }
 }
 
-pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
+pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
     use ast::Expr::*;
 
     match x {
@@ -83,20 +94,22 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
                 })
                 .expect(&format!("Could not eval unknown atom {:?}", x));
 
+            ctx.push((FuncFnId("0x0".to_owned()), false));
             let args: Vec<Expr> = args.into_iter()
                 .map(|x| if do_eval {
-                    eval(scope.clone(), x)
+                    eval(ctx, scope.clone(), x)
                 } else {
                     x
                 })
                 .collect();
+            ctx.pop();
 
             if let Some(func) = func {
                 let call = func.borrow();
-                call(args)
+                call(ctx, args)
             } else if let Some(mac) = mac {
                 let call = mac.borrow();
-                call(scope, args)
+                call(ctx,scope, args)
             } else {
                 Expr::Null
             }
@@ -105,11 +118,11 @@ pub fn eval_expr(scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
     }
 }
 
-pub fn eval(scope: ScopeRef, expr: Expr) -> Expr {
+pub fn eval(ctx: &mut Context, scope: ScopeRef, expr: Expr) -> Expr {
     match expr {
         Expr::SExpr(mut args) => {
             let term = args.remove(0);
-            eval_expr(scope, term, args)
+            eval_expr(ctx, scope, term, args)
         }
         Expr::Atom(..) => {
             scope.borrow()

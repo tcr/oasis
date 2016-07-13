@@ -1,10 +1,14 @@
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub struct FuncFnId(pub String);
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum Expr {
     Int(i32),
     Atom(String),
     SExpr(Vec<Expr>),
     Str(String),
     Null,
+    TailCall(FuncFnId, Vec<Expr>),
 }
 
 impl Expr {
