@@ -21,7 +21,7 @@ pub type MacroFn = Fn(&mut Context, ScopeRef, Vec<Expr>) -> Expr;
 
 pub type ScopeRef = Alloc<Scope>;
 
-pub type Context = Vec<FuncFnId>;
+pub type Context = Vec<(FuncFnId, bool)>;
 
 pub fn create_callstack() -> Context {
     vec![]
@@ -94,6 +94,7 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
                 })
                 .expect(&format!("Could not eval unknown atom {:?}", x));
 
+            ctx.push((FuncFnId("0x0".to_owned()), false));
             let args: Vec<Expr> = args.into_iter()
                 .map(|x| if do_eval {
                     eval(ctx, scope.clone(), x)
@@ -101,6 +102,7 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
                     x
                 })
                 .collect();
+            ctx.pop();
 
             if let Some(func) = func {
                 let call = func.borrow();

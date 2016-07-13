@@ -12,6 +12,7 @@ use rand::Rng;
 use scope::*;
 use std::collections::HashMap;
 use std::io::{self, Read};
+use std::mem;
 use strfmt::strfmt;
 
 fn macro_def(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
@@ -37,33 +38,69 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let inner_ref: Rc<RwLock<Option<FuncFnId>>> = Rc::new(RwLock::new(None));
     let outer_ref = inner_ref.clone();
 
-    let closure: Alloc<FuncFn> = alloc!(move |ctx: &mut Context, args: Vec<Expr>| {
+    let closure: Alloc<FuncFn> = alloc!(move |ctx: &mut Context, mut args: Vec<Expr>| {
         // Check for TCO.
         let fn_ptr = inner_ref.read().unwrap();
         let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
-        if ctx.iter().position(|x| *x == fn_id).is_some() {
+        assert!(args.iter()
+            .all(|x| {
+                match x {
+                    &Expr::TailCall(..) => false,
+                    _ => true
+                }
+            }), "Found tail call expr in args position");
+
+        if ctx.iter().rev()
+            .take_while(|x| x.1)
+            .position(|x| x.0 == fn_id).is_some() {
             // Return early with evaluated arguments.
-            return Expr::TCO(fn_id, args);
+            return Expr::TailCall(fn_id, args);
         }
 
         // Otherwise, add to call stack and evaluate.
-        ctx.push(fn_id);
-
-        // Create inner function bindings.
-        let s2 = Scope::new(Some(parent_scope.clone()));
-        for (item, value) in names.iter().zip(args) {
-            s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
-        }
+        let pos = ctx.len();
+        ctx.push((fn_id.clone(), false));
 
         // Evaluate contents.
         let mut res = Expr::Null;
         loop {
-            for statement in content.iter() {
+            // We are not in tail-call position.
+            ctx[pos].1 = false;
+
+            // Create inner function bindings.
+            let s2 = Scope::new(Some(parent_scope.clone()));
+            for (item, value) in names.iter().zip(args) {
+                s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
+            }
+
+            let len = content.len();
+            for (i, statement) in content.iter().enumerate() {
+                // When we are evaluating the last statement, change our Context
+                // to indicate we are in terminal position
+                if i + 1 == len {
+                    ctx[pos].1 = true;
+                }
+
                 res = eval(ctx, s2.clone(), statement.clone());
             }
 
-            // Tail-call optimization.
+            // Evaluate tail call expressions if they match this function.
+            if match res {
+                Expr::TailCall(ref inner_fn_id, ) => {
+                    *inner_fn_id == fn_id
+                },
+                _ => false,
+            } {
+                if let Expr::TailCall(_, inner_args) = mem::replace(&mut res, Expr::Null) {
+                    args = inner_args;
+                    continue;
+                }
+            }
 
+            break;
+        }
+
+        ctx.pop();
         res
     });
 

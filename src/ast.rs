@@ -7,8 +7,8 @@ pub enum Expr {
     Atom(String),
     SExpr(Vec<Expr>),
     Str(String),
-    TCO(FuncFnId, Vec<Expr>),
     Null,
+    TailCall(FuncFnId, Vec<Expr>),
 }
 
 impl Expr {
