@@ -3,7 +3,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::mem;
-use std::ptr::Unique;
 use std::any::Any;
 
 pub type AllocInterior<T> = RefCell<Box<T>>;
@@ -26,7 +25,7 @@ pub type ScopeRef = Alloc<Scope>;
 
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
-    pub alloc: Vec<Unique<Box<RefCell<Box<Any>>>>>,
+    pub alloc: Vec<*mut RefCell<Box<Any>>>,
 }
 
 pub struct AllocRef<T> {
@@ -69,9 +68,9 @@ impl Context {
 
     pub fn pin<T: ?Sized>(&mut self, item: AllocInterior<T>) -> Alloc<T> {
         unsafe {
-            self.alloc.push(mem::transmute(Unique::new(Box::into_raw(box item))));
+            self.alloc.push(Box::into_raw(Box::new(item)) as *mut _);
             AllocRef {
-                ptr: mem::transmute(self.alloc.last_mut().unwrap().get_mut()),
+                ptr: mem::transmute(*self.alloc.last().unwrap()),
             }
         }
     }
