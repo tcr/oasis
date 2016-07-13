@@ -71,7 +71,7 @@ impl Context {
         unsafe {
             self.alloc.push(mem::transmute(Unique::new(Box::into_raw(box item))));
             AllocRef {
-                ptr: mem::transmute(self.alloc.last_mut().unwrap()),
+                ptr: mem::transmute(self.alloc.last_mut().unwrap().get_mut()),
             }
         }
     }
