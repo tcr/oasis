@@ -1,5 +1,8 @@
 // TODO https://github.com/ivanjovanovic/sicp/blob/master/2.3/2.3-binary-trees.scm
 
+#![feature(box_syntax)]
+#![feature(unique)]
+
 extern crate rand;
 extern crate strfmt;
 

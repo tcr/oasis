@@ -1,21 +1,20 @@
 use ast::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::ops::{Deref, DerefMut};
-use std::any::Any;
 use std::mem;
+use std::ptr::Unique;
+use std::any::Any;
 
 pub type AllocInterior<T> = RefCell<Box<T>>;
-pub type Alloc<T> = Rc<AllocInterior<T>>;
+pub type Alloc<T> = AllocRef<AllocInterior<T>>;
 
 /// Allocate objects.
 macro_rules! alloc {
     ( $ctx:expr, $x:expr ) => {
         {
             use std::cell::RefCell;
-            use std::rc::Rc;
-            Rc::new(RefCell::new(Box::new($x)))
+            $ctx.pin(RefCell::new(Box::new($x)))
         }
     };
 }
@@ -27,11 +26,19 @@ pub type ScopeRef = Alloc<Scope>;
 
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
-    pub alloc: Vec<RefCell<Box<()>>>,
+    pub alloc: Vec<Unique<Box<RefCell<Box<Any>>>>>,
 }
 
 pub struct AllocRef<T> {
     ptr: *mut T,
+}
+
+impl<T> Clone for AllocRef<T> {
+    fn clone(&self) -> AllocRef<T> {
+        AllocRef {
+            ptr: self.ptr
+        }
+    }
 }
 
 impl<T> Deref for AllocRef<T> {
@@ -60,9 +67,9 @@ impl Context {
         }
     }
 
-    pub fn pin<T: Any>(&mut self, item: RefCell<Box<T>>) -> AllocRef<RefCell<Box<T>>> {
+    pub fn pin<T: ?Sized>(&mut self, item: AllocInterior<T>) -> Alloc<T> {
         unsafe {
-            self.alloc.push(mem::transmute(item));
+            self.alloc.push(mem::transmute(Unique::new(Box::into_raw(box item))));
             AllocRef {
                 ptr: mem::transmute(self.alloc.last_mut().unwrap()),
             }
