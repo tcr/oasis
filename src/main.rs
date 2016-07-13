@@ -22,7 +22,7 @@ fn macro_def(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
-fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn macro_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     use std::rc::Rc;
     use std::sync::RwLock;
 
@@ -38,7 +38,7 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let inner_ref: Rc<RwLock<Option<FuncFnId>>> = Rc::new(RwLock::new(None));
     let outer_ref = inner_ref.clone();
 
-    let closure: Alloc<FuncFn> = alloc!(move |ctx: &mut Context, mut args: Vec<Expr>| {
+    let closure: Alloc<FuncFn> = alloc!(ctx, move |ctx: &mut Context, mut args: Vec<Expr>| {
         // Check for TCO.
         let fn_ptr = inner_ref.read().unwrap();
         let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
@@ -50,7 +50,7 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
                 }
             }), "Found tail call expr in args position");
 
-        if ctx.iter().rev()
+        if ctx.callstack.iter().rev()
             .take_while(|x| x.1)
             .position(|x| x.0 == fn_id).is_some() {
             // Return early with evaluated arguments.
@@ -58,17 +58,17 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
         }
 
         // Otherwise, add to call stack and evaluate.
-        let pos = ctx.len();
-        ctx.push((fn_id.clone(), false));
+        let pos = ctx.callstack.len();
+        ctx.callstack.push((fn_id.clone(), false));
 
         // Evaluate contents.
         let mut res = Expr::Null;
         loop {
             // We are not in tail-call position.
-            ctx[pos].1 = false;
+            ctx.callstack[pos].1 = false;
 
             // Create inner function bindings.
-            let s2 = Scope::new(Some(parent_scope.clone()));
+            let s2 = Scope::new(ctx, Some(parent_scope.clone()));
             for (item, value) in names.iter().zip(args) {
                 s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
             }
@@ -78,7 +78,7 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
                 // When we are evaluating the last statement, change our Context
                 // to indicate we are in terminal position
                 if i + 1 == len {
-                    ctx[pos].1 = true;
+                    ctx.callstack[pos].1 = true;
                 }
 
                 res = eval(ctx, s2.clone(), statement.clone());
@@ -86,7 +86,7 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
             // Evaluate tail call expressions if they match this function.
             if match res {
-                Expr::TailCall(ref inner_fn_id, ) => {
+                Expr::TailCall(ref inner_fn_id, _) => {
                     *inner_fn_id == fn_id
                 },
                 _ => false,
@@ -100,7 +100,7 @@ fn macro_defn(_: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
             break;
         }
 
-        ctx.pop();
+        ctx.callstack.pop();
         res
     });
 
@@ -131,7 +131,7 @@ fn macro_let(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     };
     let content = args;
 
-    let s2 = Scope::new(Some(scope.clone()));
+    let s2 = Scope::new(ctx, Some(scope.clone()));
     for win in bindings[..].chunks(2) {
         let item = win[0].clone();
         let value = win[1].clone();
@@ -267,36 +267,36 @@ fn run() -> io::Result<()> {
 
     let parse = lisp::parse_Exprs(&content).unwrap();
 
-    let s = Scope::new(None);
+    let mut ctx = Context::new();
+    let s = Scope::new(&mut ctx, None);
     {
         let mut s = s.borrow_mut();
 
-        s.set_atom("def", ScopeValue::Macro(alloc!(macro_def)));
-        s.set_atom("defn", ScopeValue::Macro(alloc!(macro_defn)));
-        s.set_atom("if", ScopeValue::Macro(alloc!(macro_if)));
-        s.set_atom("let", ScopeValue::Macro(alloc!(macro_let)));
+        s.set_atom("def", ScopeValue::Macro(alloc!(ctx, macro_def)));
+        s.set_atom("defn", ScopeValue::Macro(alloc!(ctx, macro_defn)));
+        s.set_atom("if", ScopeValue::Macro(alloc!(ctx, macro_if)));
+        s.set_atom("let", ScopeValue::Macro(alloc!(ctx, macro_let)));
 
-        s.set_atom("+", ScopeValue::Func(alloc!(eval_add)));
-        s.set_atom("-", ScopeValue::Func(alloc!(eval_sub)));
-        s.set_atom("*", ScopeValue::Func(alloc!(eval_mul)));
-        s.set_atom("/", ScopeValue::Func(alloc!(eval_div)));
-        s.set_atom("<<", ScopeValue::Func(alloc!(eval_bitshiftleft)));
-        s.set_atom("=", ScopeValue::Func(alloc!(eval_eq)));
-        s.set_atom("<", ScopeValue::Func(alloc!(eval_le)));
-        s.set_atom("vec", ScopeValue::Func(alloc!(eval_vec)));
-        s.set_atom("index", ScopeValue::Func(alloc!(eval_index)));
-        s.set_atom("first", ScopeValue::Func(alloc!(eval_first)));
-        s.set_atom("rest", ScopeValue::Func(alloc!(eval_rest)));
-        s.set_atom("null?", ScopeValue::Func(alloc!(eval_nullq)));
-        s.set_atom("println", ScopeValue::Func(alloc!(eval_println)));
-        s.set_atom("concat", ScopeValue::Func(alloc!(eval_concat)));
-        s.set_atom("random", ScopeValue::Func(alloc!(eval_random)));
+        s.set_atom("+", ScopeValue::Func(alloc!(ctx, eval_add)));
+        s.set_atom("-", ScopeValue::Func(alloc!(ctx, eval_sub)));
+        s.set_atom("*", ScopeValue::Func(alloc!(ctx, eval_mul)));
+        s.set_atom("/", ScopeValue::Func(alloc!(ctx, eval_div)));
+        s.set_atom("<<", ScopeValue::Func(alloc!(ctx, eval_bitshiftleft)));
+        s.set_atom("=", ScopeValue::Func(alloc!(ctx, eval_eq)));
+        s.set_atom("<", ScopeValue::Func(alloc!(ctx, eval_le)));
+        s.set_atom("vec", ScopeValue::Func(alloc!(ctx, eval_vec)));
+        s.set_atom("index", ScopeValue::Func(alloc!(ctx, eval_index)));
+        s.set_atom("first", ScopeValue::Func(alloc!(ctx, eval_first)));
+        s.set_atom("rest", ScopeValue::Func(alloc!(ctx, eval_rest)));
+        s.set_atom("null?", ScopeValue::Func(alloc!(ctx, eval_nullq)));
+        s.set_atom("println", ScopeValue::Func(alloc!(ctx, eval_println)));
+        s.set_atom("concat", ScopeValue::Func(alloc!(ctx, eval_concat)));
+        s.set_atom("random", ScopeValue::Func(alloc!(ctx, eval_random)));
     }
 
-    let mut callstack = create_callstack();
     let mut res = Expr::Null;
     for statement in parse {
-        res = eval(&mut callstack, s.clone(), statement);
+        res = eval(&mut ctx, s.clone(), statement);
     }
 
     // Uncomment to print final value.

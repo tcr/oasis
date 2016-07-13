@@ -7,7 +7,7 @@ pub type Alloc<T> = Rc<RefCell<Box<T>>>;
 
 /// Allocate objects.
 macro_rules! alloc {
-    ( $x:expr ) => {
+    ( $ctx:expr, $x:expr ) => {
         {
             use std::cell::RefCell;
             use std::rc::Rc;
@@ -21,10 +21,16 @@ pub type MacroFn = Fn(&mut Context, ScopeRef, Vec<Expr>) -> Expr;
 
 pub type ScopeRef = Alloc<Scope>;
 
-pub type Context = Vec<(FuncFnId, bool)>;
+pub struct Context {
+    pub callstack: Vec<(FuncFnId, bool)>,
+}
 
-pub fn create_callstack() -> Context {
-    vec![]
+impl Context {
+    pub fn new() -> Context {
+        Context {
+            callstack: vec![]
+        }
+    }
 }
 
 pub fn funcfn_id(closure: &Alloc<FuncFn>) -> FuncFnId {
@@ -44,8 +50,8 @@ pub struct Scope {
 }
 
 impl Scope {
-    pub fn new(parent: Option<ScopeRef>) -> ScopeRef {
-        alloc!(Scope {
+    pub fn new(ctx: &mut Context, parent: Option<ScopeRef>) -> ScopeRef {
+        alloc!(ctx, Scope {
             parent: parent,
             scope: HashMap::new(),
         })
@@ -82,8 +88,12 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
             let (func, mac, do_eval) = scope.borrow()
                 .lookup(&x, |value| {
                     match value {
-                        Some(&ScopeValue::Func(ref func)) => (Some(func.clone()), None, true),
-                        Some(&ScopeValue::Macro(ref func)) => (None, Some(func.clone()), false),
+                        Some(&ScopeValue::Func(ref func)) => {
+                            (Some(func.clone()), None, true)
+                        }
+                        Some(&ScopeValue::Macro(ref func)) => {
+                            (None, Some(func.clone()), false)
+                        }
                         Some(&ScopeValue::Expr(ref value)) => {
                             panic!("Called uncallable value: {:?}", value);
                         }
@@ -94,7 +104,7 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
                 })
                 .expect(&format!("Could not eval unknown atom {:?}", x));
 
-            ctx.push((FuncFnId("0x0".to_owned()), false));
+            ctx.callstack.push((FuncFnId("0x0".to_owned()), false));
             let args: Vec<Expr> = args.into_iter()
                 .map(|x| if do_eval {
                     eval(ctx, scope.clone(), x)
@@ -102,7 +112,7 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
                     x
                 })
                 .collect();
-            ctx.pop();
+            ctx.callstack.pop();
 
             if let Some(func) = func {
                 let call = func.borrow();
