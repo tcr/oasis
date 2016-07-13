@@ -2,8 +2,12 @@ use ast::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::ops::{Deref, DerefMut};
+use std::any::Any;
+use std::mem;
 
-pub type Alloc<T> = Rc<RefCell<Box<T>>>;
+pub type AllocInterior<T> = RefCell<Box<T>>;
+pub type Alloc<T> = Rc<AllocInterior<T>>;
 
 /// Allocate objects.
 macro_rules! alloc {
@@ -23,12 +27,45 @@ pub type ScopeRef = Alloc<Scope>;
 
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
+    pub alloc: Vec<RefCell<Box<()>>>,
+}
+
+pub struct AllocRef<T> {
+    ptr: *mut T,
+}
+
+impl<T> Deref for AllocRef<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        unsafe {
+            &*self.ptr
+        }
+    }
+}
+
+impl<T> DerefMut for AllocRef<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        unsafe {
+            &mut *self.ptr
+        }
+    }
 }
 
 impl Context {
     pub fn new() -> Context {
         Context {
-            callstack: vec![]
+            callstack: vec![],
+            alloc: vec![],
+        }
+    }
+
+    pub fn pin<T: Any>(&mut self, item: RefCell<Box<T>>) -> AllocRef<RefCell<Box<T>>> {
+        unsafe {
+            self.alloc.push(mem::transmute(item));
+            AllocRef {
+                ptr: mem::transmute(self.alloc.last_mut().unwrap()),
+            }
         }
     }
 }
