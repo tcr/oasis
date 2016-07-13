@@ -27,8 +27,8 @@ fn macro_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     use std::sync::RwLock;
 
     let key = args.remove(0);
-    let names = if let Expr::SExpr(content) = args.remove(0) {
-        content
+    let names: Vec<Expr> = if let Expr::SExpr(content) = args.remove(0) {
+        (**content.borrow()).clone()
     } else {
         vec![]
     };
@@ -125,7 +125,7 @@ fn macro_if(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
 
 fn macro_let(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let bindings = if let Expr::SExpr(content) = args.remove(0) {
-        content
+        (**content.borrow()).clone()
     } else {
         vec![]
     };
@@ -203,24 +203,28 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn eval_vec(_: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::SExpr(args)
+fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
+    Expr::SExpr(alloc!(ctx, args))
 }
 
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
     let key = args.remove(0);
-    value.as_vec()[key.as_int() as usize].clone()
+
+    let value_vec = value.as_vec();
+    value_vec[key.as_int() as usize].clone()
 }
 
 fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
-    value.as_vec()[0].clone()
+
+    let value_vec = value.as_vec();
+    value_vec[0].clone()
 }
 
-fn eval_rest(_: &mut Context, mut args: Vec<Expr>) -> Expr {
+fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
-    Expr::SExpr(args)
+    Expr::SExpr(alloc!(ctx, args))
 }
 
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {
@@ -266,7 +270,6 @@ fn run() -> io::Result<()> {
     try!(io::stdin().read_to_string(&mut content));
 
     let ast = lisp::parse_Exprs(&content).unwrap();
-    let exprs: Vec<Expr> = ast.iter().map(|x| Expr::from_ast(x)).collect();
 
     let mut ctx = Context::new();
     let s = Scope::new(&mut ctx, None);
@@ -296,6 +299,7 @@ fn run() -> io::Result<()> {
     }
 
     let mut res = Expr::Null;
+    let exprs: Vec<Expr> = ast.iter().map(|x| Expr::from_ast(&mut ctx, x)).collect();
     for statement in exprs {
         res = eval(&mut ctx, s.clone(), statement);
     }
@@ -305,7 +309,7 @@ fn run() -> io::Result<()> {
     // println!("{:?}", res);
 
     println!("");
-    println!("allocated objects: {:?}", ctx.alloc.len());
+    println!("allocated objects: {:?}", ctx.alloc.size());
 
     Ok(())
 }

@@ -1,76 +1,10 @@
 use ast::*;
-use std::cell::RefCell;
+use std::cell::{RefCell, Ref, RefMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::mem;
 use std::any::Any;
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct FuncFnId(pub String);
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub enum Expr {
-    Int(i32),
-    Atom(String),
-    SExpr(Vec<Expr>),
-    Str(String),
-    Null,
-    TailCall(FuncFnId, Vec<Expr>),
-}
-
-impl Expr {
-    pub fn from_ast(ast: &Ast) -> Expr {
-        match ast {
-            &Ast::Int(value) => Expr::Int(value),
-            &Ast::Atom(ref value) => Expr::Atom(value.clone()),
-            &Ast::SExpr(ref value) => Expr::SExpr(value.iter().map(|x| {
-                Expr::from_ast(x)
-            }).collect()),
-            &Ast::Str(ref value) => Expr::Str(value.clone()),
-            &Ast::Null => Expr::Null,
-        }
-    }
-
-    pub fn new_atom(key: &str) -> Expr {
-        Expr::Atom(key.to_owned())
-    }
-
-    pub fn as_vec<'a>(&'a self) -> &'a Vec<Expr> {
-        match self {
-            &Expr::SExpr(ref inner) => inner,
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn as_vec_mut<'a>(&'a mut self) -> &'a mut Vec<Expr> {
-        match self {
-            &mut Expr::SExpr(ref mut inner) => inner,
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn as_bool(&self) -> bool {
-        match self {
-            &Expr::Int(0) | &Expr::Null => false,
-            _ => true,
-        }
-    }
-
-    pub fn as_int(&self) -> i32 {
-        match self {
-            &Expr::Int(value) => value,
-            _ => 0,
-        }
-    }
-
-    pub fn as_string(&self) -> String {
-        match self {
-            &Expr::Str(ref value) => value.clone(),
-            &Expr::Int(value) => format!("{}", value),
-            rest => format!("{:?}", rest),
-        }
-    }
-}
+use std::hash::{Hash, Hasher};
 
 pub type AllocInterior<T> = RefCell<Box<T>>;
 pub type Alloc<T> = AllocRef<AllocInterior<T>>;
@@ -85,18 +19,15 @@ macro_rules! alloc {
     };
 }
 
-pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
-pub type MacroFn = Fn(&mut Context, ScopeRef, Vec<Expr>) -> Expr;
-
-pub type ScopeRef = Alloc<Scope>;
-
-pub struct Context {
-    pub callstack: Vec<(FuncFnId, bool)>,
-    pub alloc: Vec<*mut RefCell<Box<Any>>>,
-}
-
+#[derive(Eq, PartialEq, Debug)]
 pub struct AllocRef<T> {
     ptr: *mut T,
+}
+
+impl<T> Hash for AllocRef<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.ptr.hash(state);
+    }
 }
 
 impl<T> Clone for AllocRef<T> {
@@ -125,21 +56,122 @@ impl<T> DerefMut for AllocRef<T> {
     }
 }
 
-impl Context {
-    pub fn new() -> Context {
-        Context {
-            callstack: vec![],
-            alloc: vec![],
+pub struct AllocArena {
+    arena: Vec<*mut RefCell<Box<Any>>>,
+}
+
+impl AllocArena {
+    pub fn new() -> AllocArena {
+        AllocArena {
+            arena: vec![],
         }
     }
 
     pub fn pin<T: ?Sized>(&mut self, item: AllocInterior<T>) -> Alloc<T> {
         unsafe {
-            self.alloc.push(Box::into_raw(Box::new(item)) as *mut _);
+            self.arena.push(Box::into_raw(Box::new(item)) as *mut _);
             AllocRef {
-                ptr: mem::transmute(*self.alloc.last().unwrap()),
+                ptr: mem::transmute(*self.arena.last().unwrap()),
             }
         }
+    }
+
+    /// Kinda rough estimate for arena size.
+    pub fn size(&self) -> usize {
+        self.arena.len()
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub struct FuncFnId(pub String);
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub enum Expr {
+    Int(i32),
+    Atom(String),
+    SExpr(Alloc<Vec<Expr>>),
+    Str(String),
+    Null,
+    TailCall(FuncFnId, Vec<Expr>),
+}
+
+impl Expr {
+    pub fn from_ast(ctx: &mut Context, ast: &Ast) -> Expr {
+        match ast {
+            &Ast::Int(value) => Expr::Int(value),
+            &Ast::Atom(ref value) => Expr::Atom(value.clone()),
+            &Ast::SExpr(ref value) => {
+                let exprs: Vec<Expr> = value.iter().map(|x| {
+                    Expr::from_ast(ctx, x)
+                }).collect();
+                Expr::SExpr(alloc!(ctx, exprs))
+            }
+            &Ast::Str(ref value) => Expr::Str(value.clone()),
+            &Ast::Null => Expr::Null,
+        }
+    }
+
+    pub fn new_atom(key: &str) -> Expr {
+        Expr::Atom(key.to_owned())
+    }
+
+    pub fn as_vec<'a>(&'a self) -> Ref<'a, Box<Vec<Expr>>> {
+        match self {
+            &Expr::SExpr(ref inner) => inner.borrow(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, Box<Vec<Expr>>> {
+        match self {
+            &mut Expr::SExpr(ref mut inner) => inner.borrow_mut(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_bool(&self) -> bool {
+        match self {
+            &Expr::Int(0) | &Expr::Null => false,
+            _ => true,
+        }
+    }
+
+    pub fn as_int(&self) -> i32 {
+        match self {
+            &Expr::Int(value) => value,
+            _ => 0,
+        }
+    }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            &Expr::Str(ref value) => value.clone(),
+            &Expr::Int(value) => format!("{}", value),
+            rest => format!("{:?}", rest),
+        }
+    }
+}
+
+pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
+pub type MacroFn = Fn(&mut Context, ScopeRef, Vec<Expr>) -> Expr;
+
+pub type ScopeRef = Alloc<Scope>;
+
+pub struct Context {
+    pub callstack: Vec<(FuncFnId, bool)>,
+    pub alloc: AllocArena,
+}
+
+impl Context {
+    pub fn new() -> Context {
+        Context {
+            callstack: vec![],
+            alloc: AllocArena::new(),
+        }
+    }
+
+    pub fn pin<T: ?Sized>(&mut self, item: AllocInterior<T>) -> Alloc<T> {
+        self.alloc.pin(item)
     }
 }
 
@@ -240,7 +272,10 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
 
 pub fn eval(ctx: &mut Context, scope: ScopeRef, expr: Expr) -> Expr {
     match expr {
-        Expr::SExpr(mut args) => {
+        Expr::SExpr(args) => {
+            let mut args: Vec<Expr> = {
+                (**args.borrow_mut()).clone()
+            };
             let term = args.remove(0);
             eval_expr(ctx, scope, term, args)
         }
