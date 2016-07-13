@@ -5,6 +5,73 @@ use std::ops::{Deref, DerefMut};
 use std::mem;
 use std::any::Any;
 
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub struct FuncFnId(pub String);
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub enum Expr {
+    Int(i32),
+    Atom(String),
+    SExpr(Vec<Expr>),
+    Str(String),
+    Null,
+    TailCall(FuncFnId, Vec<Expr>),
+}
+
+impl Expr {
+    pub fn from_ast(ast: &Ast) -> Expr {
+        match ast {
+            &Ast::Int(value) => Expr::Int(value),
+            &Ast::Atom(ref value) => Expr::Atom(value.clone()),
+            &Ast::SExpr(ref value) => Expr::SExpr(value.iter().map(|x| {
+                Expr::from_ast(x)
+            }).collect()),
+            &Ast::Str(ref value) => Expr::Str(value.clone()),
+            &Ast::Null => Expr::Null,
+        }
+    }
+
+    pub fn new_atom(key: &str) -> Expr {
+        Expr::Atom(key.to_owned())
+    }
+
+    pub fn as_vec<'a>(&'a self) -> &'a Vec<Expr> {
+        match self {
+            &Expr::SExpr(ref inner) => inner,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_vec_mut<'a>(&'a mut self) -> &'a mut Vec<Expr> {
+        match self {
+            &mut Expr::SExpr(ref mut inner) => inner,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_bool(&self) -> bool {
+        match self {
+            &Expr::Int(0) | &Expr::Null => false,
+            _ => true,
+        }
+    }
+
+    pub fn as_int(&self) -> i32 {
+        match self {
+            &Expr::Int(value) => value,
+            _ => 0,
+        }
+    }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            &Expr::Str(ref value) => value.clone(),
+            &Expr::Int(value) => format!("{}", value),
+            rest => format!("{:?}", rest),
+        }
+    }
+}
+
 pub type AllocInterior<T> = RefCell<Box<T>>;
 pub type Alloc<T> = AllocRef<AllocInterior<T>>;
 
@@ -124,7 +191,7 @@ impl Scope {
 }
 
 pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
-    use ast::Expr::*;
+    use self::Expr::*;
 
     match x {
         Atom(..) => {

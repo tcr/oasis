@@ -1,4 +1,5 @@
 // TODO https://github.com/ivanjovanovic/sicp/blob/master/2.3/2.3-binary-trees.scm
+// TODO http://www.stefankrause.net/wp/?p=14
 
 extern crate rand;
 extern crate strfmt;
@@ -7,7 +8,6 @@ extern crate strfmt;
 pub mod ast;
 pub mod lisp;
 
-use ast::*;
 use rand::Rng;
 use scope::*;
 use std::collections::HashMap;
@@ -265,7 +265,8 @@ fn run() -> io::Result<()> {
     let mut content = String::new();
     try!(io::stdin().read_to_string(&mut content));
 
-    let parse = lisp::parse_Exprs(&content).unwrap();
+    let ast = lisp::parse_Exprs(&content).unwrap();
+    let exprs: Vec<Expr> = ast.iter().map(|x| Expr::from_ast(x)).collect();
 
     let mut ctx = Context::new();
     let s = Scope::new(&mut ctx, None);
@@ -295,13 +296,16 @@ fn run() -> io::Result<()> {
     }
 
     let mut res = Expr::Null;
-    for statement in parse {
+    for statement in exprs {
         res = eval(&mut ctx, s.clone(), statement);
     }
 
     // Uncomment to print final value.
     let _ = res;
     // println!("{:?}", res);
+
+    println!("");
+    println!("allocated objects: {:?}", ctx.alloc.len());
 
     Ok(())
 }

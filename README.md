@@ -12,6 +12,15 @@ or e.g.
 cat test/binary-trees.oasis | cargo run --release
 ```
 
+## TODO
+
+* Switch values to "values" and GC'd objects
+* Merge StackValue with Expr
+* Eliminate scopes in functions / macros
+* Create pedantic, cyclic GC test
+* Create root to tip iterator/marker
+* LPRI: Pursure immutability (vecs vs lists)
+
 ## License
 
 MIT and Apache-2.0

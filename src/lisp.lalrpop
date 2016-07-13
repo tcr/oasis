@@ -3,24 +3,24 @@ use ast::*;
 
 grammar;
 
-pub Exprs: Vec<Expr> = { // (1)
+pub Exprs: Vec<Ast> = { // (1)
     <v:(<Expr>)*> => v,
 };
 
-Expr: Expr = {
-    "(" <Exprs> ")" => Expr::SExpr(<>),
-    "null" => Expr::Null,
-    Num => Expr::Int(<>),
+Expr: Ast = {
+    "(" <Exprs> ")" => Ast::SExpr(<>),
+    "null" => Ast::Null,
+    Num => Ast::Int(<>),
     r#""(?:[^"\\]|\\.)*""# => {
       let val = <>;
-      Expr::Str(val[1..val.len() - 1].to_owned())
+      Ast::Str(val[1..val.len() - 1].to_owned())
     },
     r#"'(?:[^'\\]|\\.)*'"# => {
       let val = <>;
-      Expr::Str(val[1..val.len() - 1].to_owned())
+      Ast::Str(val[1..val.len() - 1].to_owned())
     },
-    r";[^;\n\r]*" => Expr::Null,
-    Term => Expr::Atom(<>),
+    r";[^;\n\r]*" => Ast::Null,
+    Term => Ast::Atom(<>),
 };
 
 Term: String = {
