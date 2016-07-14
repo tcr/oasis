@@ -52,93 +52,101 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
         vec![]
     };
 
-    let content = args;
     let parent_scope = scope.clone();
     let inner_ref: Rc<RwLock<Option<FuncFnId>>> = Rc::new(RwLock::new(None));
     let outer_ref = inner_ref.clone();
 
-    let closure: Alloc = alloc!(ctx, GcMem::FuncMem(Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
-        // Check for TCO.
-        let fn_ptr = inner_ref.read().unwrap();
-        let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
-        assert!(args.iter()
-            .all(|x| {
-                match x {
-                    &Expr::TailCall(..) => false,
-                    _ => true
+    let debug_key = key.clone();
+
+    let content = args;
+    let content_track = content.clone();
+    let closure: Alloc = alloc!(ctx, GcMem::FuncMem(FuncInner {
+        body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
+            println!("key {:?}", debug_key);
+
+            // Check for TCO.
+            let fn_ptr = inner_ref.read().unwrap();
+            let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
+            assert!(args.iter()
+                .all(|x| {
+                    match x {
+                        &Expr::TailCall(..) => false,
+                        _ => true
+                    }
+                }), "Found tail call expr in args position");
+
+            if ctx.callstack.iter().rev()
+                .take_while(|x| x.1)
+                .position(|x| x.0 == fn_id).is_some() {
+                // Return early with evaluated arguments.
+                return Expr::TailCall(fn_id, args);
+            }
+
+            // Temporarily pin all arguments
+            // TODO make this temporary
+            //for item in &args {
+            //    if let Some(alloc) = item.get_mem() {
+            //        ctx.roots.push(alloc.clone());
+            //    }
+            //}
+
+            // Otherwise, add to call stack and evaluate.
+            let pos = ctx.callstack.len();
+            ctx.callstack.push((fn_id.clone(), false));
+
+            // Evaluate contents.
+            let mut res = Expr::Null;
+            loop {
+                // We are not in tail-call position.
+                ctx.callstack[pos].1 = false;
+
+                // Create inner function bindings.
+                let s2 = Scope::new(ctx, Some(parent_scope.clone()));
+                for (item, value) in names.iter().zip(args) {
+                    s2.borrow_mut().as_scope().set((*item).clone(), value.clone());
                 }
-            }), "Found tail call expr in args position");
 
-        if ctx.callstack.iter().rev()
-            .take_while(|x| x.1)
-            .position(|x| x.0 == fn_id).is_some() {
-            // Return early with evaluated arguments.
-            return Expr::TailCall(fn_id, args);
-        }
-
-        // Temporarily pin all arguments
-        // TODO make this temporary
-        for item in &args {
-            if let Some(alloc) = item.get_mem() {
-                ctx.roots.push(alloc.clone());
-            }
-        }
-
-        // Otherwise, add to call stack and evaluate.
-        let pos = ctx.callstack.len();
-        ctx.callstack.push((fn_id.clone(), false));
-
-        // Evaluate contents.
-        let mut res = Expr::Null;
-        loop {
-            // We are not in tail-call position.
-            ctx.callstack[pos].1 = false;
-
-            // Create inner function bindings.
-            let s2 = Scope::new(ctx, Some(parent_scope.clone()));
-            for (item, value) in names.iter().zip(args) {
-                s2.borrow_mut().as_scope().set((*item).clone(), value.clone());
-            }
-
-            let len = content.len();
-            for (i, statement) in content.iter().enumerate() {
-                // When we are evaluating the last statement, change our Context
-                // to indicate we are in terminal position
-                if i + 1 == len {
-                    ctx.callstack[pos].1 = true;
-                }
-
-                //println!("statement: {:?}", statement);
-                res = eval(ctx, s2.clone(), statement.clone());
-            }
-
-            // Evaluate tail call expressions if they match this function.
-            if match res {
-                Expr::TailCall(ref inner_fn_id, _) => {
-                    *inner_fn_id == fn_id
-                },
-                _ => false,
-            } {
-                if let Expr::TailCall(_, inner_args) = mem::replace(&mut res, Expr::Null) {
-                    // Temporarily pin all arguments
-                    // TODO make this temporary
-                    for item in &inner_args {
-                        if let Some(alloc) = item.get_mem() {
-                            ctx.roots.push(alloc.clone());
-                        }
+                let len = content.len();
+                for (i, statement) in content.iter().enumerate() {
+                    // When we are evaluating the last statement, change our Context
+                    // to indicate we are in terminal position
+                    if i + 1 == len {
+                        ctx.callstack[pos].1 = true;
                     }
 
-                    args = inner_args;
-                    continue;
+                    println!("statement: {:?}", statement);
+                    res = eval(ctx, s2.clone(), statement.clone());
                 }
+
+                // Evaluate tail call expressions if they match this function.
+                if match res {
+                    Expr::TailCall(ref inner_fn_id, _) => {
+                        *inner_fn_id == fn_id
+                    },
+                    _ => false,
+                } {
+                    if let Expr::TailCall(_, inner_args) = mem::replace(&mut res, Expr::Null) {
+                        // Temporarily pin all arguments
+                        // TODO make this temporary
+                        //for item in &inner_args {
+                        //    if let Some(alloc) = item.get_mem() {
+                        //        ctx.roots.push(alloc.clone());
+                        //    }
+                        //}
+
+                        args = inner_args;
+                        continue;
+                    }
+                }
+
+                break;
             }
 
-            break;
-        }
-
-        ctx.callstack.pop();
-        res
-    })));
+            ctx.callstack.pop();
+            res
+        }),
+        statements: content_track,
+    }));
 
     // Store unique closure ID.
     *outer_ref.write().unwrap() = Some(funcfn_id(&closure));
@@ -327,22 +335,22 @@ fn run() -> io::Result<()> {
         s.set_atom("if", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_if)))));
         s.set_atom("let", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_let)))));
 
-        s.set_atom("+", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_add)))));
-        s.set_atom("-", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_sub)))));
-        s.set_atom("*", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_mul)))));
-        s.set_atom("/", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_div)))));
-        s.set_atom("<<", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_bitshiftleft)))));
-        s.set_atom("=", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_eq)))));
-        s.set_atom("<", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_le)))));
-        s.set_atom("vec", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_vec)))));
-        s.set_atom("index", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_index)))));
-        s.set_atom("first", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_first)))));
-        s.set_atom("rest", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_rest)))));
-        s.set_atom("null?", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_nullq)))));
-        s.set_atom("println", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_println)))));
-        s.set_atom("concat", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_concat)))));
-        s.set_atom("random", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_random)))));
-        s.set_atom("len", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_list)))));
+        s.set_atom("+", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_add)))));
+        s.set_atom("-", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_sub)))));
+        s.set_atom("*", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_mul)))));
+        s.set_atom("/", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_div)))));
+        s.set_atom("<<", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_bitshiftleft)))));
+        s.set_atom("=", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_eq)))));
+        s.set_atom("<", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_le)))));
+        s.set_atom("vec", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_vec)))));
+        s.set_atom("index", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_index)))));
+        s.set_atom("first", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_first)))));
+        s.set_atom("rest", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_rest)))));
+        s.set_atom("null?", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_nullq)))));
+        s.set_atom("println", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_println)))));
+        s.set_atom("concat", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_concat)))));
+        s.set_atom("random", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_random)))));
+        s.set_atom("len", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_list)))));
     }
 
     let mut res = Expr::Null;

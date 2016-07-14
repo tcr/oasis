@@ -9,9 +9,14 @@ pub struct FuncFnId(pub String);
 pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
 pub type SpecialFn = Fn(&mut Context, Alloc, Vec<Expr>) -> Expr;
 
+pub struct FuncInner {
+    pub body: Box<FuncFn>,
+    pub statements: Vec<Expr>,
+}
+
 pub enum GcMem {
     ListMem(Vec<Expr>),
-    FuncMem(Box<FuncFn>),
+    FuncMem(FuncInner),
     SpecialMem(Box<SpecialFn>),
     ScopeMem(Scope),
 }
@@ -31,7 +36,7 @@ impl GcMem {
         }
     }
 
-    pub fn as_func(&self) -> &Box<FuncFn> {
+    pub fn as_func(&self) -> &FuncInner {
         match self {
             &GcMem::FuncMem(ref inner) => inner,
             _ => unimplemented!(),
@@ -50,6 +55,13 @@ impl GcMem {
             &mut GcMem::ScopeMem(ref mut inner) => inner,
             _ => unimplemented!(),
         }
+    }
+
+    pub fn wrap_fn(target: Box<FuncFn>) -> GcMem {
+        GcMem::FuncMem(FuncInner {
+            body: target,
+            statements: vec![],
+        })
     }
 }
 
@@ -304,6 +316,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
             if let Some(func) = func {
                 let call = func.borrow();
                 let call = call.as_func();
+                let call = &call.body;
                 call(ctx, args)
             } else if let Some(special) = special {
                 let call = special.borrow();
