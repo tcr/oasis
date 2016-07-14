@@ -17,20 +17,20 @@ use std::io::{self, Read};
 use std::mem;
 use strfmt::strfmt;
 
-fn special_def(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn special_def(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = eval(ctx, scope.clone(), args.remove(0));
-    scope.borrow_mut().set(key, value);
+    scope.borrow_mut().as_scope().set(key, value);
     Expr::Null
 }
 
-fn special_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     use std::rc::Rc;
     use std::sync::RwLock;
 
     let key = args.remove(0);
     let names: Vec<Expr> = if let Expr::SExpr(content) = args.remove(0) {
-        (**content.borrow()).clone()
+        content.borrow().as_list().clone()
     } else {
         vec![]
     };
@@ -40,7 +40,7 @@ fn special_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr
     let inner_ref: Rc<RwLock<Option<FuncFnId>>> = Rc::new(RwLock::new(None));
     let outer_ref = inner_ref.clone();
 
-    let closure: Alloc<FuncFn> = alloc!(ctx, move |ctx: &mut Context, mut args: Vec<Expr>| {
+    let closure: Alloc = alloc!(ctx, GcMem::FuncMem(Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
         // Check for TCO.
         let fn_ptr = inner_ref.read().unwrap();
         let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
@@ -72,7 +72,7 @@ fn special_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr
             // Create inner function bindings.
             let s2 = Scope::new(ctx, Some(parent_scope.clone()));
             for (item, value) in names.iter().zip(args) {
-                s2.borrow_mut().set((*item).clone(), value.clone());
+                s2.borrow_mut().as_scope().set((*item).clone(), value.clone());
             }
 
             let len = content.len();
@@ -104,16 +104,16 @@ fn special_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr
 
         ctx.callstack.pop();
         res
-    });
+    })));
 
     // Store unique closure ID.
     *outer_ref.write().unwrap() = Some(funcfn_id(&closure));
 
-    scope.borrow_mut().set(key, Expr::Func(closure));
+    scope.borrow_mut().as_scope().set(key, Expr::Func(closure));
     Expr::Null
 }
 
-fn special_if(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn special_if(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let if_val = args.remove(0);
     let then_val = args.remove(0);
     let else_val = args.remove(0);
@@ -125,9 +125,9 @@ fn special_if(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn special_let(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn special_let(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let bindings = if let Expr::SExpr(content) = args.remove(0) {
-        (**content.borrow()).clone()
+        content.borrow().as_list().clone()
     } else {
         vec![]
     };
@@ -138,7 +138,7 @@ fn special_let(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr 
         let item = win[0].clone();
         let value = win[1].clone();
         let value = eval(ctx, s2.clone(), value);
-        s2.borrow_mut().set(item, value);
+        s2.borrow_mut().as_scope().set(item, value);
     }
 
     let mut res = Expr::Null;
@@ -206,7 +206,7 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::SExpr(alloc!(ctx, args))
+    Expr::SExpr(alloc!(ctx, GcMem::ListMem(args)))
 }
 
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -226,7 +226,7 @@ fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
-    Expr::SExpr(alloc!(ctx, args))
+    Expr::SExpr(alloc!(ctx, GcMem::ListMem(args)))
 }
 
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {
@@ -284,28 +284,29 @@ fn run() -> io::Result<()> {
     let s = Scope::new(&mut ctx, None);
     {
         let mut s = s.borrow_mut();
+        let mut s = s.as_scope();
 
-        s.set_atom("def", Expr::Special(alloc!(ctx, special_def)));
-        s.set_atom("defn", Expr::Special(alloc!(ctx, special_defn)));
-        s.set_atom("if", Expr::Special(alloc!(ctx, special_if)));
-        s.set_atom("let", Expr::Special(alloc!(ctx, special_let)));
+        s.set_atom("def", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_def)))));
+        s.set_atom("defn", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_defn)))));
+        s.set_atom("if", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_if)))));
+        s.set_atom("let", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_let)))));
 
-        s.set_atom("+", Expr::Func(alloc!(ctx, eval_add)));
-        s.set_atom("-", Expr::Func(alloc!(ctx, eval_sub)));
-        s.set_atom("*", Expr::Func(alloc!(ctx, eval_mul)));
-        s.set_atom("/", Expr::Func(alloc!(ctx, eval_div)));
-        s.set_atom("<<", Expr::Func(alloc!(ctx, eval_bitshiftleft)));
-        s.set_atom("=", Expr::Func(alloc!(ctx, eval_eq)));
-        s.set_atom("<", Expr::Func(alloc!(ctx, eval_le)));
-        s.set_atom("vec", Expr::Func(alloc!(ctx, eval_vec)));
-        s.set_atom("index", Expr::Func(alloc!(ctx, eval_index)));
-        s.set_atom("first", Expr::Func(alloc!(ctx, eval_first)));
-        s.set_atom("rest", Expr::Func(alloc!(ctx, eval_rest)));
-        s.set_atom("null?", Expr::Func(alloc!(ctx, eval_nullq)));
-        s.set_atom("println", Expr::Func(alloc!(ctx, eval_println)));
-        s.set_atom("concat", Expr::Func(alloc!(ctx, eval_concat)));
-        s.set_atom("random", Expr::Func(alloc!(ctx, eval_random)));
-        s.set_atom("len", Expr::Func(alloc!(ctx, eval_list)));
+        s.set_atom("+", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_add)))));
+        s.set_atom("-", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_sub)))));
+        s.set_atom("*", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_mul)))));
+        s.set_atom("/", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_div)))));
+        s.set_atom("<<", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_bitshiftleft)))));
+        s.set_atom("=", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_eq)))));
+        s.set_atom("<", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_le)))));
+        s.set_atom("vec", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_vec)))));
+        s.set_atom("index", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_index)))));
+        s.set_atom("first", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_first)))));
+        s.set_atom("rest", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_rest)))));
+        s.set_atom("null?", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_nullq)))));
+        s.set_atom("println", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_println)))));
+        s.set_atom("concat", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_concat)))));
+        s.set_atom("random", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_random)))));
+        s.set_atom("len", Expr::Func(alloc!(ctx, GcMem::FuncMem(Box::new(eval_list)))));
     }
 
     let mut res = Expr::Null;
@@ -318,7 +319,7 @@ fn run() -> io::Result<()> {
     println!("allocated objects: {:?}", ctx.alloc.size());
 
     ctx.alloc.reset();
-    s.borrow_mut().mark();
+    s.borrow_mut().as_scope().mark();
     ctx.alloc.sweep();
 
     // Uncomment to print final value.

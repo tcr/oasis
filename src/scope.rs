@@ -6,6 +6,53 @@ use std::collections::HashMap;
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FuncFnId(pub String);
 
+pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
+pub type SpecialFn = Fn(&mut Context, Alloc, Vec<Expr>) -> Expr;
+
+pub enum GcMem {
+    ListMem(Vec<Expr>),
+    FuncMem(Box<FuncFn>),
+    SpecialMem(Box<SpecialFn>),
+    ScopeMem(Scope),
+}
+
+impl GcMem {
+    pub fn as_list(&self) -> &Vec<Expr> {
+        match self {
+            &GcMem::ListMem(ref inner) => inner,
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn as_list_mut(&mut self) -> &mut Vec<Expr> {
+        match self {
+            &mut GcMem::ListMem(ref mut inner) => inner,
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn as_func(&self) -> &Box<FuncFn> {
+        match self {
+            &GcMem::FuncMem(ref inner) => inner,
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn as_special(&self) -> &Box<SpecialFn> {
+        match self {
+            &GcMem::SpecialMem(ref inner) => inner,
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn as_scope(&mut self) -> &mut Scope {
+        match self {
+            &mut GcMem::ScopeMem(ref mut inner) => inner,
+            _ => unimplemented!(),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum Expr {
     Int(i32),
@@ -13,9 +60,9 @@ pub enum Expr {
     Str(String),
     Null,
     TailCall(FuncFnId, Vec<Expr>),
-    SExpr(Alloc<Vec<Expr>>),
-    Func(Alloc<FuncFn>),
-    Special(Alloc<SpecialFn>),
+    SExpr(Alloc),
+    Func(Alloc),
+    Special(Alloc),
 }
 
 impl Expr {
@@ -27,7 +74,7 @@ impl Expr {
                 let exprs: Vec<Expr> = value.iter().map(|x| {
                     Expr::from_ast(ctx, x)
                 }).collect();
-                Expr::SExpr(alloc!(ctx, exprs))
+                Expr::SExpr(alloc!(ctx, GcMem::ListMem(exprs)))
             }
             &Ast::Str(ref value) => Expr::Str(value.clone()),
             &Ast::Null => Expr::Null,
@@ -38,16 +85,24 @@ impl Expr {
         Expr::Atom(key.to_owned())
     }
 
-    pub fn as_vec<'a>(&'a self) -> Ref<'a, Box<Vec<Expr>>> {
+    pub fn as_vec<'a>(&'a self) -> Ref<'a, Vec<Expr>> {
         match self {
-            &Expr::SExpr(ref inner) => inner.borrow(),
+            &Expr::SExpr(ref inner) => {
+                Ref::map(inner.borrow(), |x| {
+                    x.as_list()
+                })
+            }
             _ => unreachable!(),
         }
     }
 
-    pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, Box<Vec<Expr>>> {
+    pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, Vec<Expr>> {
         match self {
-            &mut Expr::SExpr(ref mut inner) => inner.borrow_mut(),
+            &mut Expr::SExpr(ref mut inner) => {
+                RefMut::map(inner.borrow_mut(), |x| {
+                    x.as_list_mut()
+                })
+            }
             _ => unreachable!(),
         }
     }
@@ -75,11 +130,6 @@ impl Expr {
     }
 }
 
-pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
-pub type SpecialFn = Fn(&mut Context, ScopeRef, Vec<Expr>) -> Expr;
-
-pub type ScopeRef = Alloc<Scope>;
-
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
     pub alloc: AllocArena,
@@ -93,27 +143,26 @@ impl Context {
         }
     }
 
-    pub fn pin<T: ?Sized>(&mut self, item: AllocInterior<T>) -> Alloc<T> {
+    pub fn pin(&mut self, item: AllocInterior) -> Alloc {
         self.alloc.pin(item)
     }
 }
 
-pub fn funcfn_id(closure: &Alloc<FuncFn>) -> FuncFnId {
-    let ref boxed_fn: Box<FuncFn> = *closure.borrow();
-    FuncFnId(format!("{:p}", &*boxed_fn))
+pub fn funcfn_id(closure: &Alloc) -> FuncFnId {
+    FuncFnId(closure.id())
 }
 
 pub struct Scope {
-    parent: Option<ScopeRef>,
+    parent: Option<Alloc>,
     scope: HashMap<Expr, Expr>,
 }
 
 impl Scope {
-    pub fn new(ctx: &mut Context, parent: Option<ScopeRef>) -> ScopeRef {
-        alloc!(ctx, Scope {
+    pub fn new(ctx: &mut Context, parent: Option<Alloc>) -> Alloc {
+        alloc!(ctx, GcMem::ScopeMem(Scope {
             parent: parent,
             scope: HashMap::new(),
-        })
+        }))
     }
 
     pub fn set(&mut self, key: Expr, value: Expr) -> Option<Expr> {
@@ -131,7 +180,9 @@ impl Scope {
             Some(ref value) => Some(inner(Some(value))),
             None => {
                 match self.parent {
-                    Some(ref parent) => parent.borrow().lookup(key, inner),
+                    Some(ref parent) => {
+                        parent.borrow_mut().as_scope().lookup(key, inner)
+                    }
                     None => None,
                 }
             }
@@ -139,19 +190,21 @@ impl Scope {
     }
 }
 
-pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -> Expr {
+pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> Expr {
     use self::Expr::*;
 
     match x {
         Atom(..) => {
-            let (func, special, do_eval) = scope.borrow()
+            let (func, special): (Option<AllocRef<_>>, Option<AllocRef<_>>) = scope
+                .borrow_mut()
+                .as_scope()
                 .lookup(&x, |value| {
                     match value {
                         Some(&Expr::Func(ref func)) => {
-                            (Some(func.clone()), None, true)
+                            (Some(func.clone()), None)
                         }
                         Some(&Expr::Special(ref func)) => {
-                            (None, Some(func.clone()), false)
+                            (None, Some(func.clone()))
                         }
                         Some(ref value) => {
                             panic!("Called uncallable value: {:?}", value);
@@ -165,7 +218,7 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
 
             ctx.callstack.push((FuncFnId("0x0".to_owned()), false));
             let args: Vec<Expr> = args.into_iter()
-                .map(|x| if do_eval {
+                .map(|x| if func.is_some() {
                     eval(ctx, scope.clone(), x)
                 } else {
                     x
@@ -175,9 +228,11 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
 
             if let Some(func) = func {
                 let call = func.borrow();
+                let call = call.as_func();
                 call(ctx, args)
             } else if let Some(special) = special {
                 let call = special.borrow();
+                let call = call.as_special();
                 call(ctx,scope, args)
             } else {
                 Expr::Null
@@ -187,17 +242,18 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
     }
 }
 
-pub fn eval(ctx: &mut Context, scope: ScopeRef, expr: Expr) -> Expr {
+pub fn eval(ctx: &mut Context, scope: Alloc, expr: Expr) -> Expr {
     match expr {
         Expr::SExpr(args) => {
             let mut args: Vec<Expr> = {
-                (**args.borrow_mut()).clone()
+                args.borrow_mut().as_list().clone()
             };
             let term = args.remove(0);
             eval_expr(ctx, scope, term, args)
         }
         Expr::Atom(..) => {
-            scope.borrow()
+            scope.borrow_mut()
+                .as_scope()
                 .lookup(&expr, |x| {
                     if let Some(inner) = x {
                         inner.clone()
@@ -213,7 +269,7 @@ pub fn eval(ctx: &mut Context, scope: ScopeRef, expr: Expr) -> Expr {
 
 impl Scope {
     pub fn mark(&mut self) {
-        for (key, value) in &mut self.scope {
+        for (_, value) in &mut self.scope {
             match value {
                 &mut Expr::Func(ref mut inner) => {
                     inner.mark();

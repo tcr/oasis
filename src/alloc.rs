@@ -1,19 +1,18 @@
-use std::any::Any;
+use scope::GcMem;
 use std::cell::{RefCell, Ref, RefMut};
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::mem;
 use std::cmp::Eq;
 use std::ops::{Deref, DerefMut};
 
-pub type AllocInterior<T> = GcRef<Box<T>>;
-pub type Alloc<T> = AllocRef<AllocInterior<T>>;
+pub type AllocInterior = GcRef<GcMem>;
+pub type Alloc = AllocRef<AllocInterior>;
 
 /// Allocate objects.
 macro_rules! alloc {
     ( $ctx:expr, $x:expr ) => {
         {
-            $ctx.pin(GcRef::new(Box::new($x)))
+            $ctx.pin(GcRef::new($x))
         }
     };
 }
@@ -96,10 +95,15 @@ impl<T> GcRef<T> {
     pub fn reset(&mut self) {
         self.marked = false;
     }
+
+    pub fn id(&self) -> String {
+        // TODO more unique IDs
+        format!("{:p}", self)
+    }
 }
 
 pub struct AllocArena {
-    arena: Vec<*mut GcRef<Box<Any>>>,
+    arena: Vec<*mut AllocInterior>,
 }
 
 impl AllocArena {
@@ -109,12 +113,10 @@ impl AllocArena {
         }
     }
 
-    pub fn pin<T: ?Sized>(&mut self, item: AllocInterior<T>) -> Alloc<T> {
-        unsafe {
-            self.arena.push(Box::into_raw(Box::new(item)) as *mut _);
-            AllocRef {
-                ptr: mem::transmute(*self.arena.last().unwrap()),
-            }
+    pub fn pin(&mut self, item: AllocInterior) -> Alloc {
+        self.arena.push(Box::into_raw(Box::new(item)) as *mut _);
+        AllocRef {
+            ptr: *self.arena.last().unwrap(),
         }
     }
 
@@ -130,8 +132,7 @@ impl AllocArena {
         self.arena.retain(|item| {
             unsafe {
                 if (**item).marked == false {
-                    println!("what's going on here");
-                    let container: Box<GcRef<Box<Any>>> = Box::from_raw(*item);
+                    let container: Box<AllocInterior> = Box::from_raw(*item);
                     drop(container);
                     false
                 } else {
