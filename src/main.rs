@@ -17,6 +17,19 @@ use std::io::{self, Read};
 use std::mem;
 use strfmt::strfmt;
 
+fn special_gc(ctx: &mut Context, scope: Alloc, _: Vec<Expr>) -> Expr {
+    println!("----------");
+    println!("*** allocated objects: {:?}", ctx.alloc.size());
+
+    ctx.alloc.reset();
+    scope.borrow_mut().as_scope().mark();
+    ctx.alloc.sweep();
+
+    println!("*** after cleanup: {:?}", ctx.alloc.size());
+    println!("----------");
+    Expr::Null
+}
+
 fn special_def(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = eval(ctx, scope.clone(), args.remove(0));
@@ -286,6 +299,7 @@ fn run() -> io::Result<()> {
         let mut s = s.borrow_mut();
         let mut s = s.as_scope();
 
+        s.set_atom("gc", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_gc)))));
         s.set_atom("def", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_def)))));
         s.set_atom("defn", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_defn)))));
         s.set_atom("if", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_if)))));
@@ -315,19 +329,11 @@ fn run() -> io::Result<()> {
         res = eval(&mut ctx, s.clone(), statement);
     }
 
-    println!("");
-    println!("allocated objects: {:?}", ctx.alloc.size());
-
-    ctx.alloc.reset();
-    s.borrow_mut().as_scope().mark();
-    ctx.alloc.sweep();
+    special_gc(&mut ctx, s.clone(), vec![]);
 
     // Uncomment to print final value.
     let _ = res;
     // println!("{:?}", res);
-
-    println!("");
-    println!("after cleanup: {:?}", ctx.alloc.size());
 
     Ok(())
 }
