@@ -1,20 +1,19 @@
 use std::any::Any;
-use std::cell::RefCell;
+use std::cell::{RefCell, Ref, RefMut};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::cmp::Eq;
 use std::ops::{Deref, DerefMut};
 
-pub type AllocInterior<T> = RefCell<Box<T>>;
+pub type AllocInterior<T> = GcRef<Box<T>>;
 pub type Alloc<T> = AllocRef<AllocInterior<T>>;
 
 /// Allocate objects.
 macro_rules! alloc {
     ( $ctx:expr, $x:expr ) => {
         {
-            use std::cell::RefCell;
-            $ctx.pin(RefCell::new(Box::new($x)))
+            $ctx.pin(GcRef::new(Box::new($x)))
         }
     };
 }
@@ -46,7 +45,7 @@ impl<T> Hash for AllocRef<T> {
 impl<T> Clone for AllocRef<T> {
     fn clone(&self) -> AllocRef<T> {
         AllocRef {
-            ptr: self.ptr
+            ptr: self.ptr,
         }
     }
 }
@@ -69,8 +68,30 @@ impl<T> DerefMut for AllocRef<T> {
     }
 }
 
+pub struct GcRef<T> {
+    inner: RefCell<T>,
+    marked: bool,
+}
+
+impl<T> GcRef<T> {
+    pub fn new(item: T) -> GcRef<T> {
+        GcRef {
+            inner: RefCell::new(item),
+            marked: false,
+        }
+    }
+
+    pub fn borrow(&self) -> Ref<T> {
+        self.inner.borrow()
+    }
+
+    pub fn borrow_mut(&self) -> RefMut<T> {
+        self.inner.borrow_mut()
+    }
+}
+
 pub struct AllocArena {
-    arena: Vec<*mut RefCell<Box<Any>>>,
+    arena: Vec<*mut GcRef<Box<Any>>>,
 }
 
 impl AllocArena {
@@ -88,6 +109,12 @@ impl AllocArena {
             }
         }
     }
+
+    //pub fn reset(&mut self) {
+    //    for item in self.arena.iter_mut() {
+    //        item.marked = false;
+    //    }
+    //}
 
     /// Kinda rough estimate for arena size.
     pub fn size(&self) -> usize {
