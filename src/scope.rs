@@ -1,6 +1,6 @@
 use ast::*;
 use alloc::*;
-use std::cell::{Ref, RefMut};
+use std::cell::{Ref, RefMut, BorrowState};
 use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -174,9 +174,8 @@ impl Context {
         match value {
             &mut Expr::Func(ref mut inner) => {
                 if !inner.marked {
-                    inner.marked = true;
                     //println!("fn");
-                    //Context::mark(inner);
+                    Context::mark(inner);
                 }
             }
             &mut Expr::Special(ref mut inner) => {
@@ -201,27 +200,35 @@ impl Context {
     pub fn mark(value: &mut Alloc) {
         //println!("marking start... {:?}", value);
         value.marked = true;
-        match *value.borrow_mut() {
-            GcMem::ScopeMem(ref mut inner) => {
-                //println!("marking scope: {:?}", value);
-                for (_, value) in &mut inner.scope {
-                    Context::mark_expr(value);
-                }
-                if let Some(ref mut parent) = inner.parent {
-                    //println!("parent");
-                    if !parent.marked {
-                        Context::mark(parent);
+
+        if value.borrow_state() != BorrowState::Unused {
+            println!("*** active borrow state on mem, ignoring: {:?}", value.borrow_state())
+        } else {
+            match *value.borrow_mut() {
+                GcMem::ScopeMem(ref mut inner) => {
+                    //println!("marking scope: {:?}", value);
+                    for (_, value) in &mut inner.scope {
+                        Context::mark_expr(value);
                     }
-                    //println!("done parent");
+                    if let Some(ref mut parent) = inner.parent {
+                        //println!("parent");
+                        if !parent.marked {
+                            Context::mark(parent);
+                        }
+                        //println!("done parent");
+                    }
                 }
-            }
-            GcMem::ListMem(ref mut inner) => {
-                for value in inner.iter_mut() {
-                    Context::mark_expr(value);
+                GcMem::ListMem(ref mut inner) => {
+                    for value in inner.iter_mut() {
+                        Context::mark_expr(value);
+                    }
                 }
-            }
-            _ => {
-                //println!("marking unrelated thing {:?}", value);
+                GcMem::FuncMem(ref mut inner) => {
+                    for value in inner.statements.iter_mut() {
+                        Context::mark_expr(value);
+                    }
+                }
+                _ => { }
             }
         }
     }
@@ -260,11 +267,11 @@ impl Scope {
         self.scope.insert(Expr::Atom(key.to_owned()), value)
     }
 
-    pub fn lookup<F, T>(&self, key: &Expr, mut inner: F) -> Option<T>
-        where F: FnMut(Option<&Expr>) -> T
+    pub fn lookup<F, T>(&mut self, key: &Expr, mut inner: F) -> Option<T>
+        where F: FnMut(Option<&mut Expr>) -> T
     {
-        match self.scope.get(key) {
-            Some(ref value) => Some(inner(Some(value))),
+        match self.scope.get_mut(key) {
+            Some(ref mut value) => Some(inner(Some(value))),
             None => {
                 match self.parent {
                     Some(ref parent) => {
@@ -287,10 +294,11 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 .as_scope()
                 .lookup(&x, |value| {
                     match value {
-                        Some(&Expr::Func(ref func)) => {
+                        Some(&mut Expr::Func(ref mut func)) => {
+                            Context::mark(func);
                             (Some(func.clone()), None)
                         }
-                        Some(&Expr::Special(ref func)) => {
+                        Some(&mut Expr::Special(ref func)) => {
                             (None, Some(func.clone()))
                         }
                         Some(ref value) => {
@@ -327,8 +335,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
             }
         }
         _ => {
-            println!("uh {:?}", x);
-            unreachable!()
+            panic!("Attempted to evaluate non-atom: {:?}", x);
         }
     }
 }

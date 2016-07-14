@@ -1,6 +1,8 @@
 // TODO https://github.com/ivanjovanovic/sicp/blob/master/2.3/2.3-binary-trees.scm
 // TODO http://www.stefankrause.net/wp/?p=14
 
+#![feature(borrow_state)]
+
 extern crate rand;
 extern crate strfmt;
 
@@ -21,12 +23,12 @@ fn special_gc(ctx: &mut Context, mut s: Alloc, _: Vec<Expr>) -> Expr {
     println!("----------");
     println!("*** allocated objects: {:?}", ctx.alloc.size());
 
-    ctx.alloc.reset();
     println!("*** marking child...");
     Context::mark(&mut s);
     println!("*** marking parent...");
     ctx.mark_roots();
     ctx.alloc.sweep();
+    ctx.alloc.reset();
 
     println!("*** after cleanup: {:?}", ctx.alloc.size());
     println!("----------");

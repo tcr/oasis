@@ -1,5 +1,5 @@
 use scope::GcMem;
-use std::cell::{RefCell, Ref, RefMut};
+use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::cmp::Eq;
@@ -86,6 +86,10 @@ impl<T> GcRef<T> {
 
     pub fn borrow_mut(&self) -> RefMut<T> {
         self.inner.borrow_mut()
+    }
+
+    pub fn borrow_state(&self) -> BorrowState {
+        self.inner.borrow_state()
     }
 
     pub fn id(&self) -> String {
