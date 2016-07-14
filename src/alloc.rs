@@ -88,6 +88,14 @@ impl<T> GcRef<T> {
     pub fn borrow_mut(&self) -> RefMut<T> {
         self.inner.borrow_mut()
     }
+
+    pub fn mark(&mut self) {
+        self.marked = true;
+    }
+
+    pub fn reset(&mut self) {
+        self.marked = false;
+    }
 }
 
 pub struct AllocArena {
@@ -110,13 +118,30 @@ impl AllocArena {
         }
     }
 
-    //pub fn reset(&mut self) {
-    //    for item in self.arena.iter_mut() {
-    //        item.marked = false;
-    //    }
-    //}
+    pub fn reset(&mut self) {
+        for item in self.arena.iter_mut() {
+            unsafe {
+                (**item).reset();
+            }
+        }
+    }
 
-    /// Kinda rough estimate for arena size.
+    pub fn sweep(&mut self) {
+        self.arena.retain(|item| {
+            unsafe {
+                if (**item).marked == false {
+                    println!("what's going on here");
+                    let container: Box<GcRef<Box<Any>>> = Box::from_raw(*item);
+                    drop(container);
+                    false
+                } else {
+                    true
+                }
+            }
+        });
+    }
+
+    /// Rough, poor estimate for arena size.
     pub fn size(&self) -> usize {
         self.arena.len()
     }

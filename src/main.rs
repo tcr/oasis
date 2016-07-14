@@ -314,15 +314,19 @@ fn run() -> io::Result<()> {
         res = eval(&mut ctx, s.clone(), statement);
     }
 
-    //ctx.alloc.reset();
-    //s.borrow().sweep();
+    println!("");
+    println!("allocated objects: {:?}", ctx.alloc.size());
+
+    ctx.alloc.reset();
+    s.borrow_mut().mark();
+    ctx.alloc.sweep();
 
     // Uncomment to print final value.
     let _ = res;
     // println!("{:?}", res);
 
     println!("");
-    println!("allocated objects: {:?}", ctx.alloc.size());
+    println!("after cleanup: {:?}", ctx.alloc.size());
 
     Ok(())
 }

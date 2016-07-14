@@ -10,10 +10,10 @@ pub struct FuncFnId(pub String);
 pub enum Expr {
     Int(i32),
     Atom(String),
-    SExpr(Alloc<Vec<Expr>>),
     Str(String),
     Null,
     TailCall(FuncFnId, Vec<Expr>),
+    SExpr(Alloc<Vec<Expr>>),
     Func(Alloc<FuncFn>),
     Special(Alloc<SpecialFn>),
 }
@@ -208,5 +208,24 @@ pub fn eval(ctx: &mut Context, scope: ScopeRef, expr: Expr) -> Expr {
                 .expect(&format!("Eval failed to find named value: {:?}", expr))
         }
         _ => expr,
+    }
+}
+
+impl Scope {
+    pub fn mark(&mut self) {
+        for (key, value) in &mut self.scope {
+            match value {
+                &mut Expr::Func(ref mut inner) => {
+                    inner.mark();
+                }
+                &mut Expr::Special(ref mut inner) => {
+                    inner.mark();
+                }
+                &mut Expr::SExpr(ref mut inner) => {
+                    inner.mark();
+                }
+                _ => { }
+            }
+        }
     }
 }
