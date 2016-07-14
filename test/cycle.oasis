@@ -1,0 +1,6 @@
+(def list (vec 1 2 3))
+
+(concat list list)
+
+(println (len list))
+(println (len (index list 3)))

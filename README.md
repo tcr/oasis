@@ -14,7 +14,6 @@ cat test/binary-trees.oasis | cargo run --release
 
 ## TODO
 
-* Eliminate scopes in functions / macros
 * Create pedantic, cyclic GC test
 * Create root to tip iterator/marker
 * LPRI: Pursure immutability (vecs vs lists)

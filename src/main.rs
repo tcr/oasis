@@ -261,6 +261,13 @@ fn eval_random(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     Expr::Int(rng.gen_range(0, n.as_int()))
 }
 
+fn eval_list(_: &mut Context, mut args: Vec<Expr>) -> Expr {
+    let list = args.remove(0);
+
+    let vec = list.as_vec();
+    Expr::Int(vec.len() as i32)
+}
+
 fn main() {
     run().unwrap();
 }
@@ -296,6 +303,7 @@ fn run() -> io::Result<()> {
         s.set_atom("println", Expr::Func(alloc!(ctx, eval_println)));
         s.set_atom("concat", Expr::Func(alloc!(ctx, eval_concat)));
         s.set_atom("random", Expr::Func(alloc!(ctx, eval_random)));
+        s.set_atom("len", Expr::Func(alloc!(ctx, eval_list)));
     }
 
     let mut res = Expr::Null;
