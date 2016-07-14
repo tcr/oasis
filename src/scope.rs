@@ -1,10 +1,12 @@
 use ast::*;
+use std::any::Any;
 use std::cell::{RefCell, Ref, RefMut};
 use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::mem;
-use std::any::Any;
+use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::mem;
+use std::cmp::Eq;
+use std::ops::{Deref, DerefMut};
 
 pub type AllocInterior<T> = RefCell<Box<T>>;
 pub type Alloc<T> = AllocRef<AllocInterior<T>>;
@@ -19,9 +21,22 @@ macro_rules! alloc {
     };
 }
 
-#[derive(Eq, PartialEq, Debug)]
 pub struct AllocRef<T> {
     ptr: *mut T,
+}
+
+impl<T> PartialEq for AllocRef<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr == other.ptr
+    }
+}
+
+impl<T> Eq for AllocRef<T> { }
+
+impl<T> fmt::Debug for AllocRef<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "AllocRef({:p})", self.ptr)
+    }
 }
 
 impl<T> Hash for AllocRef<T> {
@@ -93,6 +108,8 @@ pub enum Expr {
     Str(String),
     Null,
     TailCall(FuncFnId, Vec<Expr>),
+    Func(Alloc<FuncFn>),
+    Macro(Alloc<MacroFn>),
 }
 
 impl Expr {
@@ -180,15 +197,9 @@ pub fn funcfn_id(closure: &Alloc<FuncFn>) -> FuncFnId {
     FuncFnId(format!("{:p}", &*boxed_fn))
 }
 
-pub enum ScopeValue {
-    Func(Alloc<FuncFn>),
-    Macro(Alloc<MacroFn>),
-    Expr(Expr),
-}
-
 pub struct Scope {
     parent: Option<ScopeRef>,
-    scope: HashMap<Expr, ScopeValue>,
+    scope: HashMap<Expr, Expr>,
 }
 
 impl Scope {
@@ -199,16 +210,16 @@ impl Scope {
         })
     }
 
-    pub fn set(&mut self, key: Expr, value: ScopeValue) -> Option<ScopeValue> {
+    pub fn set(&mut self, key: Expr, value: Expr) -> Option<Expr> {
         self.scope.insert(key, value)
     }
 
-    pub fn set_atom(&mut self, key: &str, value: ScopeValue) -> Option<ScopeValue> {
+    pub fn set_atom(&mut self, key: &str, value: Expr) -> Option<Expr> {
         self.scope.insert(Expr::Atom(key.to_owned()), value)
     }
 
     pub fn lookup<F, T>(&self, key: &Expr, mut inner: F) -> Option<T>
-        where F: FnMut(Option<&ScopeValue>) -> T
+        where F: FnMut(Option<&Expr>) -> T
     {
         match self.scope.get(key) {
             Some(ref value) => Some(inner(Some(value))),
@@ -230,13 +241,13 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
             let (func, mac, do_eval) = scope.borrow()
                 .lookup(&x, |value| {
                     match value {
-                        Some(&ScopeValue::Func(ref func)) => {
+                        Some(&Expr::Func(ref func)) => {
                             (Some(func.clone()), None, true)
                         }
-                        Some(&ScopeValue::Macro(ref func)) => {
+                        Some(&Expr::Macro(ref func)) => {
                             (None, Some(func.clone()), false)
                         }
-                        Some(&ScopeValue::Expr(ref value)) => {
+                        Some(ref value) => {
                             panic!("Called uncallable value: {:?}", value);
                         }
                         _ => {
@@ -282,7 +293,7 @@ pub fn eval(ctx: &mut Context, scope: ScopeRef, expr: Expr) -> Expr {
         Expr::Atom(..) => {
             scope.borrow()
                 .lookup(&expr, |x| {
-                    if let Some(&ScopeValue::Expr(ref inner)) = x {
+                    if let Some(inner) = x {
                         inner.clone()
                     } else {
                         unreachable!("Cannot evaluate value {:?}", expr);

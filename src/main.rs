@@ -18,7 +18,7 @@ use strfmt::strfmt;
 fn macro_def(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = eval(ctx, scope.clone(), args.remove(0));
-    scope.borrow_mut().set(key, ScopeValue::Expr(value));
+    scope.borrow_mut().set(key, value);
     Expr::Null
 }
 
@@ -70,7 +70,7 @@ fn macro_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
             // Create inner function bindings.
             let s2 = Scope::new(ctx, Some(parent_scope.clone()));
             for (item, value) in names.iter().zip(args) {
-                s2.borrow_mut().set((*item).clone(), ScopeValue::Expr(value.clone()));
+                s2.borrow_mut().set((*item).clone(), value.clone());
             }
 
             let len = content.len();
@@ -107,7 +107,7 @@ fn macro_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     // Store unique closure ID.
     *outer_ref.write().unwrap() = Some(funcfn_id(&closure));
 
-    scope.borrow_mut().set(key, ScopeValue::Func(closure));
+    scope.borrow_mut().set(key, Expr::Func(closure));
     Expr::Null
 }
 
@@ -136,7 +136,7 @@ fn macro_let(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
         let item = win[0].clone();
         let value = win[1].clone();
         let value = eval(ctx, s2.clone(), value);
-        s2.borrow_mut().set(item, ScopeValue::Expr(value));
+        s2.borrow_mut().set(item, value);
     }
 
     let mut res = Expr::Null;
@@ -276,26 +276,26 @@ fn run() -> io::Result<()> {
     {
         let mut s = s.borrow_mut();
 
-        s.set_atom("def", ScopeValue::Macro(alloc!(ctx, macro_def)));
-        s.set_atom("defn", ScopeValue::Macro(alloc!(ctx, macro_defn)));
-        s.set_atom("if", ScopeValue::Macro(alloc!(ctx, macro_if)));
-        s.set_atom("let", ScopeValue::Macro(alloc!(ctx, macro_let)));
+        s.set_atom("def", Expr::Macro(alloc!(ctx, macro_def)));
+        s.set_atom("defn", Expr::Macro(alloc!(ctx, macro_defn)));
+        s.set_atom("if", Expr::Macro(alloc!(ctx, macro_if)));
+        s.set_atom("let", Expr::Macro(alloc!(ctx, macro_let)));
 
-        s.set_atom("+", ScopeValue::Func(alloc!(ctx, eval_add)));
-        s.set_atom("-", ScopeValue::Func(alloc!(ctx, eval_sub)));
-        s.set_atom("*", ScopeValue::Func(alloc!(ctx, eval_mul)));
-        s.set_atom("/", ScopeValue::Func(alloc!(ctx, eval_div)));
-        s.set_atom("<<", ScopeValue::Func(alloc!(ctx, eval_bitshiftleft)));
-        s.set_atom("=", ScopeValue::Func(alloc!(ctx, eval_eq)));
-        s.set_atom("<", ScopeValue::Func(alloc!(ctx, eval_le)));
-        s.set_atom("vec", ScopeValue::Func(alloc!(ctx, eval_vec)));
-        s.set_atom("index", ScopeValue::Func(alloc!(ctx, eval_index)));
-        s.set_atom("first", ScopeValue::Func(alloc!(ctx, eval_first)));
-        s.set_atom("rest", ScopeValue::Func(alloc!(ctx, eval_rest)));
-        s.set_atom("null?", ScopeValue::Func(alloc!(ctx, eval_nullq)));
-        s.set_atom("println", ScopeValue::Func(alloc!(ctx, eval_println)));
-        s.set_atom("concat", ScopeValue::Func(alloc!(ctx, eval_concat)));
-        s.set_atom("random", ScopeValue::Func(alloc!(ctx, eval_random)));
+        s.set_atom("+", Expr::Func(alloc!(ctx, eval_add)));
+        s.set_atom("-", Expr::Func(alloc!(ctx, eval_sub)));
+        s.set_atom("*", Expr::Func(alloc!(ctx, eval_mul)));
+        s.set_atom("/", Expr::Func(alloc!(ctx, eval_div)));
+        s.set_atom("<<", Expr::Func(alloc!(ctx, eval_bitshiftleft)));
+        s.set_atom("=", Expr::Func(alloc!(ctx, eval_eq)));
+        s.set_atom("<", Expr::Func(alloc!(ctx, eval_le)));
+        s.set_atom("vec", Expr::Func(alloc!(ctx, eval_vec)));
+        s.set_atom("index", Expr::Func(alloc!(ctx, eval_index)));
+        s.set_atom("first", Expr::Func(alloc!(ctx, eval_first)));
+        s.set_atom("rest", Expr::Func(alloc!(ctx, eval_rest)));
+        s.set_atom("null?", Expr::Func(alloc!(ctx, eval_nullq)));
+        s.set_atom("println", Expr::Func(alloc!(ctx, eval_println)));
+        s.set_atom("concat", Expr::Func(alloc!(ctx, eval_concat)));
+        s.set_atom("random", Expr::Func(alloc!(ctx, eval_random)));
     }
 
     let mut res = Expr::Null;
