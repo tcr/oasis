@@ -109,7 +109,7 @@ pub enum Expr {
     Null,
     TailCall(FuncFnId, Vec<Expr>),
     Func(Alloc<FuncFn>),
-    Macro(Alloc<MacroFn>),
+    Special(Alloc<SpecialFn>),
 }
 
 impl Expr {
@@ -170,7 +170,7 @@ impl Expr {
 }
 
 pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
-pub type MacroFn = Fn(&mut Context, ScopeRef, Vec<Expr>) -> Expr;
+pub type SpecialFn = Fn(&mut Context, ScopeRef, Vec<Expr>) -> Expr;
 
 pub type ScopeRef = Alloc<Scope>;
 
@@ -238,13 +238,13 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
 
     match x {
         Atom(..) => {
-            let (func, mac, do_eval) = scope.borrow()
+            let (func, special, do_eval) = scope.borrow()
                 .lookup(&x, |value| {
                     match value {
                         Some(&Expr::Func(ref func)) => {
                             (Some(func.clone()), None, true)
                         }
-                        Some(&Expr::Macro(ref func)) => {
+                        Some(&Expr::Special(ref func)) => {
                             (None, Some(func.clone()), false)
                         }
                         Some(ref value) => {
@@ -270,8 +270,8 @@ pub fn eval_expr(ctx: &mut Context, scope: ScopeRef, x: Expr, args: Vec<Expr>) -
             if let Some(func) = func {
                 let call = func.borrow();
                 call(ctx, args)
-            } else if let Some(mac) = mac {
-                let call = mac.borrow();
+            } else if let Some(special) = special {
+                let call = special.borrow();
                 call(ctx,scope, args)
             } else {
                 Expr::Null

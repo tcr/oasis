@@ -15,14 +15,14 @@ use std::io::{self, Read};
 use std::mem;
 use strfmt::strfmt;
 
-fn macro_def(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn special_def(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = eval(ctx, scope.clone(), args.remove(0));
     scope.borrow_mut().set(key, value);
     Expr::Null
 }
 
-fn macro_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn special_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     use std::rc::Rc;
     use std::sync::RwLock;
 
@@ -111,7 +111,7 @@ fn macro_defn(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
-fn macro_if(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn special_if(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let if_val = args.remove(0);
     let then_val = args.remove(0);
     let else_val = args.remove(0);
@@ -123,7 +123,7 @@ fn macro_if(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn macro_let(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
+fn special_let(ctx: &mut Context, scope: ScopeRef, mut args: Vec<Expr>) -> Expr {
     let bindings = if let Expr::SExpr(content) = args.remove(0) {
         (**content.borrow()).clone()
     } else {
@@ -276,10 +276,10 @@ fn run() -> io::Result<()> {
     {
         let mut s = s.borrow_mut();
 
-        s.set_atom("def", Expr::Macro(alloc!(ctx, macro_def)));
-        s.set_atom("defn", Expr::Macro(alloc!(ctx, macro_defn)));
-        s.set_atom("if", Expr::Macro(alloc!(ctx, macro_if)));
-        s.set_atom("let", Expr::Macro(alloc!(ctx, macro_let)));
+        s.set_atom("def", Expr::Special(alloc!(ctx, special_def)));
+        s.set_atom("defn", Expr::Special(alloc!(ctx, special_defn)));
+        s.set_atom("if", Expr::Special(alloc!(ctx, special_if)));
+        s.set_atom("let", Expr::Special(alloc!(ctx, special_let)));
 
         s.set_atom("+", Expr::Func(alloc!(ctx, eval_add)));
         s.set_atom("-", Expr::Func(alloc!(ctx, eval_sub)));
