@@ -4,12 +4,14 @@
 extern crate rand;
 extern crate strfmt;
 
-#[macro_use] pub mod scope;
+#[macro_use] pub mod alloc;
 pub mod ast;
+pub mod scope;
 pub mod lisp;
 
 use rand::Rng;
 use scope::*;
+use alloc::*;
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::mem;
@@ -311,6 +313,9 @@ fn run() -> io::Result<()> {
     for statement in exprs {
         res = eval(&mut ctx, s.clone(), statement);
     }
+
+    //ctx.alloc.reset();
+    //s.borrow().sweep();
 
     // Uncomment to print final value.
     let _ = res;
