@@ -69,7 +69,7 @@ impl<T> DerefMut for AllocRef<T> {
 
 pub struct GcRef<T> {
     inner: RefCell<T>,
-    marked: bool,
+    pub marked: bool,
 }
 
 impl<T> GcRef<T> {
@@ -86,14 +86,6 @@ impl<T> GcRef<T> {
 
     pub fn borrow_mut(&self) -> RefMut<T> {
         self.inner.borrow_mut()
-    }
-
-    pub fn mark(&mut self) {
-        self.marked = true;
-    }
-
-    pub fn reset(&mut self) {
-        self.marked = false;
     }
 
     pub fn id(&self) -> String {
@@ -123,7 +115,7 @@ impl AllocArena {
     pub fn reset(&mut self) {
         for item in self.arena.iter_mut() {
             unsafe {
-                (**item).reset();
+                (**item).marked = false;
             }
         }
     }
@@ -132,6 +124,7 @@ impl AllocArena {
         self.arena.retain(|item| {
             unsafe {
                 if (**item).marked == false {
+                    println!("*** sweeping {:p}", &*(**item).borrow());
                     let container: Box<AllocInterior> = Box::from_raw(*item);
                     drop(container);
                     false

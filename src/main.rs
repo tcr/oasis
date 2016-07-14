@@ -17,16 +17,20 @@ use std::io::{self, Read};
 use std::mem;
 use strfmt::strfmt;
 
-fn special_gc(ctx: &mut Context, scope: Alloc, _: Vec<Expr>) -> Expr {
+fn special_gc(ctx: &mut Context, mut s: Alloc, _: Vec<Expr>) -> Expr {
     println!("----------");
     println!("*** allocated objects: {:?}", ctx.alloc.size());
 
     ctx.alloc.reset();
-    scope.borrow_mut().as_scope().mark();
+    println!("*** marking child...");
+    Context::mark(&mut s);
+    println!("*** marking parent...");
+    ctx.mark_roots();
     ctx.alloc.sweep();
 
     println!("*** after cleanup: {:?}", ctx.alloc.size());
     println!("----------");
+
     Expr::Null
 }
 
@@ -72,6 +76,14 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
             return Expr::TailCall(fn_id, args);
         }
 
+        // Temporarily pin all arguments
+        // TODO make this temporary
+        for item in &args {
+            if let Some(alloc) = item.get_mem() {
+                ctx.roots.push(alloc.clone());
+            }
+        }
+
         // Otherwise, add to call stack and evaluate.
         let pos = ctx.callstack.len();
         ctx.callstack.push((fn_id.clone(), false));
@@ -96,6 +108,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
                     ctx.callstack[pos].1 = true;
                 }
 
+                //println!("statement: {:?}", statement);
                 res = eval(ctx, s2.clone(), statement.clone());
             }
 
@@ -107,6 +120,14 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
                 _ => false,
             } {
                 if let Expr::TailCall(_, inner_args) = mem::replace(&mut res, Expr::Null) {
+                    // Temporarily pin all arguments
+                    // TODO make this temporary
+                    for item in &inner_args {
+                        if let Some(alloc) = item.get_mem() {
+                            ctx.roots.push(alloc.clone());
+                        }
+                    }
+
                     args = inner_args;
                     continue;
                 }
@@ -295,6 +316,7 @@ fn run() -> io::Result<()> {
 
     let mut ctx = Context::new();
     let s = Scope::new(&mut ctx, None);
+    ctx.roots.push(s.clone());
     {
         let mut s = s.borrow_mut();
         let mut s = s.as_scope();

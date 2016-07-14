@@ -24,6 +24,7 @@
 (defn iterate-trees (mx mn d)
   (let (iterations (<< 1 (+ mx mn (- d))))
     (defn inner (result i)
+      (gc)
       (if (= i (+ iterations 1))
         result
         (inner (+ result

@@ -1,4 +1,5 @@
 (defn inner (m n)
+  (gc)
   (if (< n m)
     m
     (inner (+ m 1) n)))

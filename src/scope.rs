@@ -128,11 +128,21 @@ impl Expr {
             rest => format!("{:?}", rest),
         }
     }
+
+    pub fn get_mem(&self) -> Option<&Alloc> {
+        match self {
+            &Expr::SExpr(ref inner) => Some(inner),
+            &Expr::Func(ref inner) => Some(inner),
+            &Expr::Special(ref inner) => Some(inner),
+            _ => None,
+        }
+    }
 }
 
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
     pub alloc: AllocArena,
+    pub roots: Vec<Alloc>,
 }
 
 impl Context {
@@ -140,11 +150,76 @@ impl Context {
         Context {
             callstack: vec![],
             alloc: AllocArena::new(),
+            roots: vec![],
         }
     }
 
     pub fn pin(&mut self, item: AllocInterior) -> Alloc {
         self.alloc.pin(item)
+    }
+
+    pub fn mark_expr(value: &mut Expr) {
+        match value {
+            &mut Expr::Func(ref mut inner) => {
+                if !inner.marked {
+                    inner.marked = true;
+                    //println!("fn");
+                    //Context::mark(inner);
+                }
+            }
+            &mut Expr::Special(ref mut inner) => {
+                if !inner.marked {
+                    inner.marked = true;
+                    //println!("special");
+                    //Context::mark(inner);
+                }
+            }
+            &mut Expr::SExpr(ref mut inner) => {
+                if !inner.marked {
+                    println!("list");
+                    Context::mark(inner);
+                }
+            }
+            _ => {
+                //println!("???");
+            }
+        }
+    }
+
+    pub fn mark(value: &mut Alloc) {
+        //println!("marking start... {:?}", value);
+        value.marked = true;
+        match *value.borrow_mut() {
+            GcMem::ScopeMem(ref mut inner) => {
+                //println!("marking scope: {:?}", value);
+                for (_, value) in &mut inner.scope {
+                    Context::mark_expr(value);
+                }
+                if let Some(ref mut parent) = inner.parent {
+                    //println!("parent");
+                    if !parent.marked {
+                        Context::mark(parent);
+                    }
+                    //println!("done parent");
+                }
+            }
+            GcMem::ListMem(ref mut inner) => {
+                for value in inner.iter_mut() {
+                    Context::mark_expr(value);
+                }
+            }
+            _ => {
+                //println!("marking unrelated thing {:?}", value);
+            }
+        }
+    }
+
+    pub fn mark_roots(&mut self) {
+        for scope in &mut self.roots {
+            if !scope.marked {
+                Context::mark(scope);
+            }
+        }
     }
 }
 
@@ -154,7 +229,7 @@ pub fn funcfn_id(closure: &Alloc) -> FuncFnId {
 
 pub struct Scope {
     parent: Option<Alloc>,
-    scope: HashMap<Expr, Expr>,
+    pub scope: HashMap<Expr, Expr>,
 }
 
 impl Scope {
@@ -238,7 +313,10 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 Expr::Null
             }
         }
-        _ => unreachable!(),
+        _ => {
+            println!("uh {:?}", x);
+            unreachable!()
+        }
     }
 }
 
@@ -264,24 +342,5 @@ pub fn eval(ctx: &mut Context, scope: Alloc, expr: Expr) -> Expr {
                 .expect(&format!("Eval failed to find named value: {:?}", expr))
         }
         _ => expr,
-    }
-}
-
-impl Scope {
-    pub fn mark(&mut self) {
-        for (_, value) in &mut self.scope {
-            match value {
-                &mut Expr::Func(ref mut inner) => {
-                    inner.mark();
-                }
-                &mut Expr::Special(ref mut inner) => {
-                    inner.mark();
-                }
-                &mut Expr::SExpr(ref mut inner) => {
-                    inner.mark();
-                }
-                _ => { }
-            }
-        }
     }
 }
