@@ -1,6 +1,7 @@
 use scope::GcMem;
 use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::fmt;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::cmp::Eq;
 use std::ops::{Deref, DerefMut};
@@ -69,13 +70,16 @@ impl<T> DerefMut for AllocRef<T> {
 
 pub struct GcRef<T> {
     inner: RefCell<T>,
+    pub debug_str: String,
     pub marked: bool,
 }
 
 impl<T> GcRef<T> {
-    pub fn new(item: T) -> GcRef<T> {
+    pub fn new(item: T) -> GcRef<T> where T: Debug {
+        let debug_str = format!("{:?}", item);
         GcRef {
             inner: RefCell::new(item),
+            debug_str: debug_str,
             marked: false,
         }
     }
@@ -101,6 +105,8 @@ impl<T> GcRef<T> {
 pub struct AllocArena {
     arena: Vec<*mut AllocInterior>,
 }
+
+static mut ctx_tracker: usize = 0;
 
 impl AllocArena {
     pub fn new() -> AllocArena {
@@ -128,7 +134,7 @@ impl AllocArena {
         self.arena.retain(|item| {
             unsafe {
                 if (**item).marked == false {
-                    println!("*** sweeping {:p}", &*(**item).borrow());
+                    //println!("***  {:p} {:?}", &*(**item).borrow(), (**item).debug_str);
                     let container: Box<AllocInterior> = Box::from_raw(*item);
                     drop(container);
                     false

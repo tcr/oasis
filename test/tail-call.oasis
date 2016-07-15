@@ -1,7 +1,8 @@
 (defn inner (m n)
   (gc)
+  (gc)
   (if (< n m)
     m
     (inner (+ m 1) n)))
 
-(println "Called inner loop {0} times!" (inner 0 10))
+(println "Called inner loop {0} times!" (inner 0 5))

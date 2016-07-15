@@ -1,5 +1,6 @@
 use ast::*;
 use alloc::*;
+use std::fmt;
 use std::cell::{Ref, RefMut, BorrowState};
 use std::collections::HashMap;
 
@@ -19,6 +20,17 @@ pub enum GcMem {
     FuncMem(FuncInner),
     SpecialMem(Box<SpecialFn>),
     ScopeMem(Scope),
+}
+
+impl fmt::Debug for GcMem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &GcMem::ListMem(..) => write!(f, "ListMem({:p})", self),
+            &GcMem::FuncMem(..) => write!(f, "FuncMem({:p})", self),
+            &GcMem::SpecialMem(..) => write!(f, "SpecialMem({:p})", self),
+            &GcMem::ScopeMem(..) => write!(f, "ScopeMem({:p})", self),
+        }
+    }
 }
 
 impl GcMem {
@@ -180,14 +192,12 @@ impl Context {
             }
             &mut Expr::Special(ref mut inner) => {
                 if !inner.marked {
-                    inner.marked = true;
                     //println!("special");
-                    //Context::mark(inner);
+                    Context::mark(inner);
                 }
             }
             &mut Expr::SExpr(ref mut inner) => {
                 if !inner.marked {
-                    println!("list");
                     Context::mark(inner);
                 }
             }
@@ -202,7 +212,7 @@ impl Context {
         value.marked = true;
 
         if value.borrow_state() != BorrowState::Unused {
-            println!("*** active borrow state on mem, ignoring: {:?}", value.borrow_state())
+            //println!("*** active borrow state on mem, ignoring: {:?}", value.borrow_state())
         } else {
             match *value.borrow_mut() {
                 GcMem::ScopeMem(ref mut inner) => {

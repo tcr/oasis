@@ -19,16 +19,16 @@ use std::io::{self, Read};
 use std::mem;
 use strfmt::strfmt;
 
-fn special_gc(ctx: &mut Context, mut s: Alloc, _: Vec<Expr>) -> Expr {
+fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
     println!("----------");
     println!("*** allocated objects: {:?}", ctx.alloc.size());
 
+    ctx.alloc.reset();
     println!("*** marking child...");
-    Context::mark(&mut s);
+    Context::mark(&mut scope);
     println!("*** marking parent...");
     ctx.mark_roots();
     ctx.alloc.sweep();
-    ctx.alloc.reset();
 
     println!("*** after cleanup: {:?}", ctx.alloc.size());
     println!("----------");
@@ -64,7 +64,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let content_track = content.clone();
     let closure: Alloc = alloc!(ctx, GcMem::FuncMem(FuncInner {
         body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
-            println!("key {:?}", debug_key);
+            //println!("called fn (key {:?})", debug_key);
 
             // Check for TCO.
             let fn_ptr = inner_ref.read().unwrap();
@@ -108,6 +108,10 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
                     s2.borrow_mut().as_scope().set((*item).clone(), value.clone());
                 }
 
+                // Hold on for dear life. GC
+                // TODO better to attach to current scope or something?
+                s2.borrow_mut().as_scope().set_atom("__scope", Expr::SExpr(alloc!(ctx, GcMem::ListMem(content.clone()))));
+
                 let len = content.len();
                 for (i, statement) in content.iter().enumerate() {
                     // When we are evaluating the last statement, change our Context
@@ -116,8 +120,14 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
                         ctx.callstack[pos].1 = true;
                     }
 
-                    println!("statement: {:?}", statement);
+                    //s2.borrow_mut().as_scope().lookup(&Expr::Atom("inner".to_owned()), |x| {
+                    //    println!("inner: {:?}", x);
+                    //});
+                    //println!("statement: {:?}", statement);
                     res = eval(ctx, s2.clone(), statement.clone());
+                    //s2.borrow_mut().as_scope().lookup(&Expr::Atom("inner".to_owned()), |x| {
+                    //    println!("inner2: {:?}", x);
+                    //});
                 }
 
                 // Evaluate tail call expressions if they match this function.
