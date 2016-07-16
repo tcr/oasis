@@ -13,6 +13,7 @@ pub type SpecialFn = Fn(&mut Context, Alloc, Vec<Expr>) -> Expr;
 pub struct FuncInner {
     pub body: Box<FuncFn>,
     pub statements: Vec<Expr>,
+    pub scope: Alloc,
 }
 
 pub enum GcMem {
@@ -20,6 +21,7 @@ pub enum GcMem {
     FuncMem(FuncInner),
     SpecialMem(Box<SpecialFn>),
     ScopeMem(Scope),
+    Deallocated,
 }
 
 impl fmt::Debug for GcMem {
@@ -29,6 +31,7 @@ impl fmt::Debug for GcMem {
             &GcMem::FuncMem(..) => write!(f, "FuncMem({:p})", self),
             &GcMem::SpecialMem(..) => write!(f, "SpecialMem({:p})", self),
             &GcMem::ScopeMem(..) => write!(f, "ScopeMem({:p})", self),
+            &GcMem::Deallocated => write!(f, "**DEALLOCATED**({:p})", self),
         }
     }
 }
@@ -65,13 +68,14 @@ impl GcMem {
     pub fn as_scope(&mut self) -> &mut Scope {
         match self {
             &mut GcMem::ScopeMem(ref mut inner) => inner,
-            _ => unimplemented!(),
+            _ => panic!("Cannot dereference {:?}", self),
         }
     }
 
-    pub fn wrap_fn(target: Box<FuncFn>) -> GcMem {
+    pub fn wrap_fn(target: Box<FuncFn>, scope: Alloc) -> GcMem {
         GcMem::FuncMem(FuncInner {
             body: target,
+            scope: scope,
             statements: vec![],
         })
     }
@@ -234,6 +238,7 @@ impl Context {
                     }
                 }
                 GcMem::FuncMem(ref mut inner) => {
+                    Context::mark(&mut inner.scope);
                     for value in inner.statements.iter_mut() {
                         Context::mark_expr(value);
                     }
@@ -339,7 +344,10 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
             } else if let Some(special) = special {
                 let call = special.borrow();
                 let call = call.as_special();
-                call(ctx,scope, args)
+                ctx.roots.push(scope.clone());
+                let ret = call(ctx, scope, args);
+                ctx.roots.pop();
+                ret
             } else {
                 Expr::Null
             }

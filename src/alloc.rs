@@ -131,6 +131,7 @@ impl AllocArena {
     }
 
     pub fn sweep(&mut self) {
+        /*
         self.arena.retain(|item| {
             unsafe {
                 if (**item).marked == false {
@@ -143,6 +144,18 @@ impl AllocArena {
                 }
             }
         });
+        */
+
+        for item in self.arena.iter_mut() {
+            use std::cell::{Ref, RefMut, BorrowState};
+            unsafe {
+                if (**item).marked == false {
+                    if (**item).borrow_state() == BorrowState::Unused {
+                        *(**item).borrow_mut() = GcMem::Deallocated;
+                    }
+                }
+            }
+        }
     }
 
     /// Rough, poor estimate for arena size.

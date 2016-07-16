@@ -14,8 +14,14 @@ cat test/binary-trees.oasis | cargo run --release
 
 ## TODO
 
-* Create pedantic, cyclic GC test
-* Create root to tip iterator/marker
+* Fix binary-trees to work with GC system
+* Make defn freeze its statements so it doesn't need to GC them?
+* Move to generic alloc system to switch between RefCell and GC
+* then simplify alloc! call
+* make it possible for GC to happen at any time—i.e. objects should not have to
+be explicitly added to a scope if they could have been GC'd in between creation
+and addition to scope
+* finally set up to persue an epoch based multi-thread setup!!
 * LPRI: Pursure immutability (vecs vs lists)
 
 ## License

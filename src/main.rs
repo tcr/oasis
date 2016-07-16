@@ -25,7 +25,7 @@ fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
 
     ctx.alloc.reset();
     println!("*** marking child...");
-    Context::mark(&mut scope);
+    Context::mark(&mut scope); // This is redundant b/c context eval y
     println!("*** marking parent...");
     ctx.mark_roots();
     ctx.alloc.sweep();
@@ -63,6 +63,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let content = args;
     let content_track = content.clone();
     let closure: Alloc = alloc!(ctx, GcMem::FuncMem(FuncInner {
+        scope: scope.clone(),
         body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
             //println!("called fn (key {:?})", debug_key);
 
@@ -123,7 +124,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
                     //s2.borrow_mut().as_scope().lookup(&Expr::Atom("inner".to_owned()), |x| {
                     //    println!("inner: {:?}", x);
                     //});
-                    //println!("statement: {:?}", statement);
+                    //println!("scope: {:?}", s2.clone());
                     res = eval(ctx, s2.clone(), statement.clone());
                     //s2.borrow_mut().as_scope().lookup(&Expr::Atom("inner".to_owned()), |x| {
                     //    println!("inner2: {:?}", x);
@@ -336,6 +337,7 @@ fn run() -> io::Result<()> {
 
     let mut ctx = Context::new();
     let s = Scope::new(&mut ctx, None);
+    let s2 = s.clone();
     ctx.roots.push(s.clone());
     {
         let mut s = s.borrow_mut();
@@ -347,22 +349,22 @@ fn run() -> io::Result<()> {
         s.set_atom("if", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_if)))));
         s.set_atom("let", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_let)))));
 
-        s.set_atom("+", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_add)))));
-        s.set_atom("-", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_sub)))));
-        s.set_atom("*", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_mul)))));
-        s.set_atom("/", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_div)))));
-        s.set_atom("<<", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_bitshiftleft)))));
-        s.set_atom("=", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_eq)))));
-        s.set_atom("<", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_le)))));
-        s.set_atom("vec", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_vec)))));
-        s.set_atom("index", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_index)))));
-        s.set_atom("first", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_first)))));
-        s.set_atom("rest", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_rest)))));
-        s.set_atom("null?", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_nullq)))));
-        s.set_atom("println", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_println)))));
-        s.set_atom("concat", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_concat)))));
-        s.set_atom("random", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_random)))));
-        s.set_atom("len", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_list)))));
+        s.set_atom("+", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_add), s2.clone()))));
+        s.set_atom("-", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_sub), s2.clone()))));
+        s.set_atom("*", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_mul), s2.clone()))));
+        s.set_atom("/", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_div), s2.clone()))));
+        s.set_atom("<<", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_bitshiftleft), s2.clone()))));
+        s.set_atom("=", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_eq), s2.clone()))));
+        s.set_atom("<", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_le), s2.clone()))));
+        s.set_atom("vec", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_vec), s2.clone()))));
+        s.set_atom("index", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_index), s2.clone()))));
+        s.set_atom("first", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_first), s2.clone()))));
+        s.set_atom("rest", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_rest), s2.clone()))));
+        s.set_atom("null?", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_nullq), s2.clone()))));
+        s.set_atom("println", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_println), s2.clone()))));
+        s.set_atom("concat", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_concat), s2.clone()))));
+        s.set_atom("random", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_random), s2.clone()))));
+        s.set_atom("len", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_list), s2.clone()))));
     }
 
     let mut res = Expr::Null;

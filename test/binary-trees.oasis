@@ -46,6 +46,7 @@
     (def long-lived-tree (make-tree 0 max-depth))
     (defn inner (depth)
       (iterate-trees max-depth min-depth depth)
+      (println "hey")
       (if (< (+ 2 depth) stretch-depth)
         (inner (+ 2 depth))
         null))
