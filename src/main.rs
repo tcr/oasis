@@ -20,18 +20,18 @@ use std::mem;
 use strfmt::strfmt;
 
 fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
-    println!("----------");
-    println!("*** allocated objects: {:?}", ctx.alloc.size());
+    //println!("----------");
+    //println!("*** allocated objects: {:?}", ctx.alloc.size());
 
     ctx.alloc.reset();
-    println!("*** marking child...");
-    Context::mark(&mut scope); // This is redundant b/c context eval y
-    println!("*** marking parent...");
+    //println!("*** marking child...");
+    //Context::mark(&mut scope); // This is redundant b/c context eval y
+    //println!("*** marking parent...");
     ctx.mark_roots();
     ctx.alloc.sweep();
 
-    println!("*** after cleanup: {:?}", ctx.alloc.size());
-    println!("----------");
+    //println!("*** after cleanup: {:?}", ctx.alloc.size());
+    //println!("----------");
 
     Expr::Null
 }

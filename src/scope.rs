@@ -326,6 +326,8 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 })
                 .expect(&format!("Could not eval unknown atom {:?}", x));
 
+            ctx.roots.push(scope.clone());
+
             ctx.callstack.push((FuncFnId("0x0".to_owned()), false));
             let args: Vec<Expr> = args.into_iter()
                 .map(|x| if func.is_some() {
@@ -336,7 +338,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 .collect();
             ctx.callstack.pop();
 
-            if let Some(func) = func {
+            let ret = if let Some(func) = func {
                 let call = func.borrow();
                 let call = call.as_func();
                 let call = &call.body;
@@ -344,13 +346,13 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
             } else if let Some(special) = special {
                 let call = special.borrow();
                 let call = call.as_special();
-                ctx.roots.push(scope.clone());
-                let ret = call(ctx, scope, args);
-                ctx.roots.pop();
-                ret
+                call(ctx, scope, args)
             } else {
                 Expr::Null
-            }
+            };
+
+            ctx.roots.pop();
+            ret
         }
         _ => {
             panic!("Attempted to evaluate non-atom: {:?}", x);
