@@ -14,15 +14,21 @@ cat test/binary-trees.oasis | cargo run --release
 
 ## TODO
 
-* Fix binary-trees to work with GC system
-* Make defn freeze its statements so it doesn't need to GC them?
-* Move to generic alloc system to switch between RefCell and GC
-* then simplify alloc! call
+* Separate new allocs from GC-able allocs
+* Make external thread able to iterate entire GC tree
 * make it possible for GC to happen at any time—i.e. objects should not have to
 be explicitly added to a scope if they could have been GC'd in between creation
 and addition to scope
-* finally set up to persue an epoch based multi-thread setup!!
+
+More:
+
+* Make defn freeze its statements so it doesn't need to GC them?
+* then simplify alloc! call
 * LPRI: Pursure immutability (vecs vs lists)
+* Move to generic alloc system to switch between RefCell and GC?
+* Determine if scope benefits from append-only lists
+* Determine if HAMT is too much for a read-only list (no atomics?)
+* Determine if vectors can be simplified by ctries
 
 ## License
 

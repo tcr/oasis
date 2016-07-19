@@ -72,6 +72,7 @@ pub struct GcRef<T> {
     inner: RefCell<T>,
     pub debug_str: String,
     pub marked: bool,
+    pub young: bool,
 }
 
 impl<T> GcRef<T> {
@@ -81,6 +82,7 @@ impl<T> GcRef<T> {
             inner: RefCell::new(item),
             debug_str: debug_str,
             marked: false,
+            young: true,
         }
     }
 
@@ -133,7 +135,11 @@ impl AllocArena {
     pub fn sweep(&mut self) {
         self.arena.retain(|item| {
             unsafe {
-                if (**item).marked == false {
+                // Switch youngness to not tag new elements.
+                let young = (**item).young;
+                (**item).young = false;
+
+                if !young && (**item).marked == false {
                     //println!("***  {:p} {:?}", &*(**item).borrow(), (**item).debug_str);
                     let container: Box<AllocInterior> = Box::from_raw(*item);
                     drop(container);

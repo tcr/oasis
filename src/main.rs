@@ -5,7 +5,7 @@
 
 extern crate rand;
 extern crate strfmt;
-extern crate crossbeam_hamt;
+extern crate ctrie;
 
 #[macro_use] pub mod alloc;
 pub mod ast;
@@ -18,6 +18,8 @@ use alloc::*;
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::mem;
+use std::env;
+use std::fs::File;
 use strfmt::strfmt;
 
 fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
@@ -331,8 +333,13 @@ fn main() {
 }
 
 fn run() -> io::Result<()> {
+    //let mut content = String::new();
+    //try!(io::stdin().read_to_string(&mut content));
+
+    let content_path = env::args().nth(1).unwrap();
+    let mut f = try!(File::open(content_path));
     let mut content = String::new();
-    try!(io::stdin().read_to_string(&mut content));
+    try!(f.read_to_string(&mut content));
 
     let ast = lisp::parse_Exprs(&content).unwrap();
 
@@ -375,6 +382,7 @@ fn run() -> io::Result<()> {
     }
 
     special_gc(&mut ctx, s.clone(), vec![]);
+    special_gc(&mut ctx, s.clone(), vec![]); // sweep final generation
 
     // Uncomment to print final value.
     let _ = res;

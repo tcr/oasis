@@ -3,7 +3,7 @@ use alloc::*;
 use std::fmt;
 use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::collections::HashMap;
-use crossbeam_hamt::hamt::HAMT;
+use ctrie::hamt::HAMT;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FuncFnId(pub String);
