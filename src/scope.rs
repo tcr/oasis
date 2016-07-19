@@ -3,6 +3,7 @@ use alloc::*;
 use std::fmt;
 use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::collections::HashMap;
+use crossbeam_hamt::hamt::HAMT;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FuncFnId(pub String);
@@ -221,7 +222,11 @@ impl Context {
             match *value.borrow_mut() {
                 GcMem::ScopeMem(ref mut inner) => {
                     //println!("marking scope: {:?}", value);
-                    for (_, value) in &mut inner.scope {
+                    let mut values = RefCell::new(vec![]);
+                    inner.scope.each(|k, v| {
+                        values.borrow_mut().push(v.clone());
+                    });
+                    for value in values.into_inner() {
                         Context::mark_expr(&mut *value.borrow_mut());
                     }
                     if let Some(ref mut parent) = inner.parent {
@@ -263,14 +268,14 @@ pub fn funcfn_id(closure: &Alloc) -> FuncFnId {
 
 pub struct Scope {
     parent: Option<Alloc>,
-    pub scope: HashMap<Expr, RefCell<Expr>>,
+    pub scope: HAMT<Expr, RefCell<Expr>>,
 }
 
 impl Scope {
     pub fn new(ctx: &mut Context, parent: Option<Alloc>) -> Alloc {
         alloc!(ctx, GcMem::ScopeMem(Scope {
             parent: parent,
-            scope: HashMap::new(),
+            scope: HAMT::new(),
         }))
     }
 
@@ -283,17 +288,18 @@ impl Scope {
     }
 
     pub fn lookup<F, T>(&mut self, key: &Expr, mut inner: F) -> Option<T>
-        where F: FnMut(Option<&mut Expr>) -> T
+        where F: Fn(Option<&mut Expr>) -> T
     {
-        match self.scope.get(key) {
-            Some(ref value) => Some(inner(Some(&mut *value.borrow_mut()))),
-            None => {
-                match self.parent {
-                    Some(ref parent) => {
-                        parent.borrow_mut().as_scope().lookup(key, inner)
-                    }
-                    None => None,
+        if let Some(value) = self.scope.search(key, |value| {
+            inner(Some(&mut *value.borrow_mut()))
+        }) {
+            Some(value)
+        } else {
+            match self.parent {
+                Some(ref parent) => {
+                    parent.borrow_mut().as_scope().lookup(key, inner)
                 }
+                None => None,
             }
         }
     }
