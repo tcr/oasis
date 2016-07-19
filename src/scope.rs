@@ -4,6 +4,7 @@ use std::fmt;
 use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::collections::HashMap;
 use ctrie::hamt::HAMT;
+use std::ops::Index;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FuncFnId(pub String);
@@ -16,8 +17,40 @@ pub struct FuncInner {
     pub scope: Alloc,
 }
 
+pub struct VecObject {
+    inner: HAMT<usize, RefCell<Expr>>,
+    length: usize,
+}
+
+impl VecObject {
+    pub fn new() -> VecObject {
+        VecObject {
+            inner: HAMT::new(),
+            length: 0,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
+    pub fn new_from(mut input: Vec<Expr>) -> VecObject {
+        let mut vec = VecObject::new();
+        let len = input.len();
+        for i in 0..len {
+            vec.inner.insert(i, RefCell::new(input.remove(0)));
+        }
+        vec.length = len;
+        vec
+    }
+
+    pub fn get<F: Fn(&RefCell<Expr>) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
+        self.inner.search(&key, callback)
+    }
+}
+
 pub enum GcMem {
-    VecMem(Vec<Expr>),
+    VecMem(VecObject),
     FuncMem(FuncInner),
     SpecialMem(Box<SpecialFn>),
     ScopeMem(Scope),
@@ -37,14 +70,14 @@ impl fmt::Debug for GcMem {
 }
 
 impl GcMem {
-    pub fn as_vec(&self) -> &Vec<Expr> {
+    pub fn as_vec(&self) -> &VecObject {
         match self {
             &GcMem::VecMem(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
-    pub fn as_vec_mut(&mut self) -> &mut Vec<Expr> {
+    pub fn as_vec_mut(&mut self) -> &mut VecObject {
         match self {
             &mut GcMem::VecMem(ref mut inner) => inner,
             _ => unimplemented!(),
@@ -121,7 +154,7 @@ impl Expr {
         }
     }
 
-    pub fn as_vec<'a>(&'a self) -> Ref<'a, Vec<Expr>> {
+    pub fn as_vec<'a>(&'a self) -> Ref<'a, VecObject> {
         match self {
             &Expr::Vec(ref inner) => {
                 Ref::map(inner.borrow(), |x| {
@@ -132,7 +165,7 @@ impl Expr {
         }
     }
 
-    pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, Vec<Expr>> {
+    pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, VecObject> {
         match self {
             &mut Expr::Vec(ref mut inner) => {
                 RefMut::map(inner.borrow_mut(), |x| {
@@ -245,8 +278,10 @@ impl Context {
                     }
                 }
                 GcMem::VecMem(ref mut inner) => {
-                    for value in inner.iter_mut() {
-                        Context::mark_expr(value);
+                    for i in 0..inner.len() {
+                        inner.get(i, |value| {
+                            Context::mark_expr(&mut *value.borrow_mut());
+                        });
                     }
                 }
                 GcMem::FuncMem(ref mut inner) => {

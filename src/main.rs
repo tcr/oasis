@@ -113,7 +113,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
 
                 // Hold on for dear life. GC
                 // TODO better to attach to current scope or something?
-                s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, GcMem::VecMem(content.clone()))));
+                //s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, GcMem::VecMem(VecObject::new_from(content.clone())))));
 
                 let len = content.len();
                 for (i, statement) in content.iter().enumerate() {
@@ -262,7 +262,7 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::Vec(alloc!(ctx, GcMem::VecMem(args)))
+    Expr::Vec(alloc!(ctx, GcMem::VecMem(VecObject::new_from(args))))
 }
 
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -270,19 +270,22 @@ fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
 
     let value_vec = value.as_vec();
-    value_vec[key.as_int() as usize].clone()
+    value_vec.get((key.as_int() as usize), |value| {
+        value.borrow().clone()
+    }).unwrap_or(Expr::Null)
 }
 
 fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
 
     let value_vec = value.as_vec();
-    value_vec[0].clone()
+    //TODO value_vec[0].clone()
+    Expr::Null
 }
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
-    Expr::Vec(alloc!(ctx, GcMem::VecMem(args)))
+    Expr::Vec(alloc!(ctx, GcMem::VecMem(VecObject::new_from(args))))
 }
 
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {
@@ -308,7 +311,7 @@ fn eval_concat(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let mut list = args.remove(0);
     let add = args.remove(0);
 
-    list.as_vec_mut().push(add);
+    //TODO list.as_vec_mut().push(add);
     list
 }
 
