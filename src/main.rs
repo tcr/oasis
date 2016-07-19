@@ -311,7 +311,7 @@ fn eval_concat(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let mut list = args.remove(0);
     let add = args.remove(0);
 
-    //TODO list.as_vec_mut().push(add);
+    list.as_vec_mut().push(add);
     list
 }
 
@@ -322,7 +322,7 @@ fn eval_random(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     Expr::Int(rng.gen_range(0, n.as_int()))
 }
 
-fn eval_list(_: &mut Context, mut args: Vec<Expr>) -> Expr {
+fn eval_len(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let list = args.remove(0);
 
     let vec = list.as_vec();
@@ -373,7 +373,7 @@ fn run() -> io::Result<()> {
         s.set_atom("println", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_println), s2.clone()))));
         s.set_atom("concat", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_concat), s2.clone()))));
         s.set_atom("random", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_random), s2.clone()))));
-        s.set_atom("len", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_list), s2.clone()))));
+        s.set_atom("len", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_len), s2.clone()))));
     }
 
     let mut res = Expr::Null;

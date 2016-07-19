@@ -47,6 +47,11 @@ impl VecObject {
     pub fn get<F: Fn(&RefCell<Expr>) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
         self.inner.search(&key, callback)
     }
+
+    pub fn push(&mut self, item: Expr) {
+        self.inner.insert(self.length, RefCell::new(item));
+        self.length += 1;
+    }
 }
 
 pub enum GcMem {
@@ -161,7 +166,7 @@ impl Expr {
                     x.as_vec()
                 })
             }
-            _ => unreachable!(),
+            _ => panic!("Attempted to use {:?} as vec", self),
         }
     }
 
@@ -172,7 +177,7 @@ impl Expr {
                     x.as_vec_mut()
                 })
             }
-            _ => unreachable!(),
+            _ => panic!("Attempted to use {:?} as mutable vec", self),
         }
     }
 
