@@ -5,6 +5,7 @@
 
 extern crate rand;
 extern crate strfmt;
+extern crate crossbeam_hamt;
 
 #[macro_use] pub mod alloc;
 pub mod ast;
@@ -378,6 +379,8 @@ fn run() -> io::Result<()> {
     // Uncomment to print final value.
     let _ = res;
     // println!("{:?}", res);
+
+    println!("*** final gc count: {:?}", ctx.alloc.size());
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 use ast::*;
 use alloc::*;
 use std::fmt;
-use std::cell::{Ref, RefMut, BorrowState};
+use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -222,7 +222,7 @@ impl Context {
                 GcMem::ScopeMem(ref mut inner) => {
                     //println!("marking scope: {:?}", value);
                     for (_, value) in &mut inner.scope {
-                        Context::mark_expr(value);
+                        Context::mark_expr(&mut *value.borrow_mut());
                     }
                     if let Some(ref mut parent) = inner.parent {
                         //println!("parent");
@@ -263,7 +263,7 @@ pub fn funcfn_id(closure: &Alloc) -> FuncFnId {
 
 pub struct Scope {
     parent: Option<Alloc>,
-    pub scope: HashMap<Expr, Expr>,
+    pub scope: HashMap<Expr, RefCell<Expr>>,
 }
 
 impl Scope {
@@ -274,19 +274,19 @@ impl Scope {
         }))
     }
 
-    pub fn set(&mut self, key: Expr, value: Expr) -> Option<Expr> {
-        self.scope.insert(key, value)
+    pub fn set(&mut self, key: Expr, value: Expr) {
+        self.scope.insert(key, RefCell::new(value));
     }
 
-    pub fn set_atom(&mut self, key: &str, value: Expr) -> Option<Expr> {
-        self.scope.insert(Expr::Atom(key.to_owned()), value)
+    pub fn set_atom(&mut self, key: &str, value: Expr) {
+        self.scope.insert(Expr::Atom(key.to_owned()), RefCell::new(value));
     }
 
     pub fn lookup<F, T>(&mut self, key: &Expr, mut inner: F) -> Option<T>
         where F: FnMut(Option<&mut Expr>) -> T
     {
-        match self.scope.get_mut(key) {
-            Some(ref mut value) => Some(inner(Some(value))),
+        match self.scope.get(key) {
+            Some(ref value) => Some(inner(Some(&mut *value.borrow_mut()))),
             None => {
                 match self.parent {
                     Some(ref parent) => {
