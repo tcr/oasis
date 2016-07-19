@@ -89,7 +89,10 @@ pub enum Expr {
     Str(String),
     Null,
     TailCall(FuncFnId, Vec<Expr>),
-    SExpr(Alloc),
+    List(Vec<Expr>),
+
+    // Allocations
+    Vec(Alloc),
     Func(Alloc),
     Special(Alloc),
 }
@@ -99,11 +102,10 @@ impl Expr {
         match ast {
             &Ast::Int(value) => Expr::Int(value),
             &Ast::Atom(ref value) => Expr::Atom(value.clone()),
-            &Ast::SExpr(ref value) => {
-                let exprs: Vec<Expr> = value.iter().map(|x| {
+            &Ast::List(ref value) => {
+                Expr::List(value.iter().map(|x| {
                     Expr::from_ast(ctx, x)
-                }).collect();
-                Expr::SExpr(alloc!(ctx, GcMem::ListMem(exprs)))
+                }).collect())
             }
             &Ast::Str(ref value) => Expr::Str(value.clone()),
             &Ast::Null => Expr::Null,
@@ -114,9 +116,16 @@ impl Expr {
         Expr::Atom(key.to_owned())
     }
 
+    pub fn as_list<'a>(&'a self) -> &'a Vec<Expr> {
+        match self {
+            &Expr::List(ref inner) => inner,
+            _ => unreachable!(),
+        }
+    }
+
     pub fn as_vec<'a>(&'a self) -> Ref<'a, Vec<Expr>> {
         match self {
-            &Expr::SExpr(ref inner) => {
+            &Expr::Vec(ref inner) => {
                 Ref::map(inner.borrow(), |x| {
                     x.as_list()
                 })
@@ -127,7 +136,7 @@ impl Expr {
 
     pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, Vec<Expr>> {
         match self {
-            &mut Expr::SExpr(ref mut inner) => {
+            &mut Expr::Vec(ref mut inner) => {
                 RefMut::map(inner.borrow_mut(), |x| {
                     x.as_list_mut()
                 })
@@ -160,7 +169,7 @@ impl Expr {
 
     pub fn get_mem(&self) -> Option<&Alloc> {
         match self {
-            &Expr::SExpr(ref inner) => Some(inner),
+            &Expr::Vec(ref inner) => Some(inner),
             &Expr::Func(ref inner) => Some(inner),
             &Expr::Special(ref inner) => Some(inner),
             _ => None,
@@ -201,7 +210,7 @@ impl Context {
                     Context::mark(inner);
                 }
             }
-            &mut Expr::SExpr(ref mut inner) => {
+            &mut Expr::Vec(ref mut inner) => {
                 if !inner.marked {
                     Context::mark(inner);
                 }
@@ -306,10 +315,8 @@ impl Scope {
 }
 
 pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> Expr {
-    use self::Expr::*;
-
     match x {
-        Atom(..) => {
+        Expr::Atom(..) => {
             let (func, special): (Option<AllocRef<_>>, Option<AllocRef<_>>) = scope
                 .borrow_mut()
                 .as_scope()
@@ -368,10 +375,8 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
 
 pub fn eval(ctx: &mut Context, scope: Alloc, expr: Expr) -> Expr {
     match expr {
-        Expr::SExpr(args) => {
-            let mut args: Vec<Expr> = {
-                args.borrow_mut().as_list().clone()
-            };
+        Expr::List(args) => {
+            let mut args = args.clone();
             let term = args.remove(0);
             eval_expr(ctx, scope, term, args)
         }

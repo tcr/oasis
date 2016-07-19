@@ -8,7 +8,7 @@ pub Exprs: Vec<Ast> = { // (1)
 };
 
 Expr: Ast = {
-    "(" <Exprs> ")" => Ast::SExpr(<>),
+    "(" <Exprs> ")" => Ast::List(<>),
     "null" => Ast::Null,
     Num => Ast::Int(<>),
     r#""(?:[^"\\]|\\.)*""# => {

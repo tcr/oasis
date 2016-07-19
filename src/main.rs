@@ -51,8 +51,8 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     use std::sync::RwLock;
 
     let key = args.remove(0);
-    let names: Vec<Expr> = if let Expr::SExpr(content) = args.remove(0) {
-        content.borrow().as_list().clone()
+    let names: Vec<Expr> = if let Expr::List(content) = args.remove(0) {
+        content
     } else {
         vec![]
     };
@@ -114,7 +114,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
 
                 // Hold on for dear life. GC
                 // TODO better to attach to current scope or something?
-                s2.borrow_mut().as_scope().set_atom("__scope", Expr::SExpr(alloc!(ctx, GcMem::ListMem(content.clone()))));
+                s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, GcMem::ListMem(content.clone()))));
 
                 let len = content.len();
                 for (i, statement) in content.iter().enumerate() {
@@ -184,8 +184,8 @@ fn special_if(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
 }
 
 fn special_let(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
-    let bindings = if let Expr::SExpr(content) = args.remove(0) {
-        content.borrow().as_list().clone()
+    let bindings = if let Expr::List(content) = args.remove(0) {
+        content
     } else {
         vec![]
     };
@@ -264,7 +264,7 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::SExpr(alloc!(ctx, GcMem::ListMem(args)))
+    Expr::Vec(alloc!(ctx, GcMem::ListMem(args)))
 }
 
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -284,7 +284,7 @@ fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
-    Expr::SExpr(alloc!(ctx, GcMem::ListMem(args)))
+    Expr::Vec(alloc!(ctx, GcMem::ListMem(args)))
 }
 
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {

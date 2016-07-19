@@ -2,7 +2,7 @@
 pub enum Ast {
     Int(i32),
     Atom(String),
-    SExpr(Vec<Ast>),
+    List(Vec<Ast>),
     Str(String),
     Null,
 }
