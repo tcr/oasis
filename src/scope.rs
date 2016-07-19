@@ -13,12 +13,11 @@ pub type SpecialFn = Fn(&mut Context, Alloc, Vec<Expr>) -> Expr;
 
 pub struct FuncInner {
     pub body: Box<FuncFn>,
-    pub statements: Vec<Expr>,
     pub scope: Alloc,
 }
 
 pub enum GcMem {
-    ListMem(Vec<Expr>),
+    VecMem(Vec<Expr>),
     FuncMem(FuncInner),
     SpecialMem(Box<SpecialFn>),
     ScopeMem(Scope),
@@ -28,7 +27,7 @@ pub enum GcMem {
 impl fmt::Debug for GcMem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &GcMem::ListMem(..) => write!(f, "ListMem({:p})", self),
+            &GcMem::VecMem(..) => write!(f, "VecMem({:p})", self),
             &GcMem::FuncMem(..) => write!(f, "FuncMem({:p})", self),
             &GcMem::SpecialMem(..) => write!(f, "SpecialMem({:p})", self),
             &GcMem::ScopeMem(..) => write!(f, "ScopeMem({:p})", self),
@@ -38,16 +37,16 @@ impl fmt::Debug for GcMem {
 }
 
 impl GcMem {
-    pub fn as_list(&self) -> &Vec<Expr> {
+    pub fn as_vec(&self) -> &Vec<Expr> {
         match self {
-            &GcMem::ListMem(ref inner) => inner,
+            &GcMem::VecMem(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
-    pub fn as_list_mut(&mut self) -> &mut Vec<Expr> {
+    pub fn as_vec_mut(&mut self) -> &mut Vec<Expr> {
         match self {
-            &mut GcMem::ListMem(ref mut inner) => inner,
+            &mut GcMem::VecMem(ref mut inner) => inner,
             _ => unimplemented!(),
         }
     }
@@ -77,7 +76,6 @@ impl GcMem {
         GcMem::FuncMem(FuncInner {
             body: target,
             scope: scope,
-            statements: vec![],
         })
     }
 }
@@ -127,7 +125,7 @@ impl Expr {
         match self {
             &Expr::Vec(ref inner) => {
                 Ref::map(inner.borrow(), |x| {
-                    x.as_list()
+                    x.as_vec()
                 })
             }
             _ => unreachable!(),
@@ -138,7 +136,7 @@ impl Expr {
         match self {
             &mut Expr::Vec(ref mut inner) => {
                 RefMut::map(inner.borrow_mut(), |x| {
-                    x.as_list_mut()
+                    x.as_vec_mut()
                 })
             }
             _ => unreachable!(),
@@ -246,16 +244,13 @@ impl Context {
                         //println!("done parent");
                     }
                 }
-                GcMem::ListMem(ref mut inner) => {
+                GcMem::VecMem(ref mut inner) => {
                     for value in inner.iter_mut() {
                         Context::mark_expr(value);
                     }
                 }
                 GcMem::FuncMem(ref mut inner) => {
                     Context::mark(&mut inner.scope);
-                    for value in inner.statements.iter_mut() {
-                        Context::mark_expr(value);
-                    }
                 }
                 _ => { }
             }

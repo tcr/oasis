@@ -63,8 +63,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
 
     let debug_key = key.clone();
 
-    let content = args;
-    let content_track = content.clone();
+    let content = args; // TODO ensure purity
     let closure: Alloc = alloc!(ctx, GcMem::FuncMem(FuncInner {
         scope: scope.clone(),
         body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
@@ -114,7 +113,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
 
                 // Hold on for dear life. GC
                 // TODO better to attach to current scope or something?
-                s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, GcMem::ListMem(content.clone()))));
+                s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, GcMem::VecMem(content.clone()))));
 
                 let len = content.len();
                 for (i, statement) in content.iter().enumerate() {
@@ -161,7 +160,6 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
             ctx.callstack.pop();
             res
         }),
-        statements: content_track,
     }));
 
     // Store unique closure ID.
@@ -264,7 +262,7 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::Vec(alloc!(ctx, GcMem::ListMem(args)))
+    Expr::Vec(alloc!(ctx, GcMem::VecMem(args)))
 }
 
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -284,7 +282,7 @@ fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
-    Expr::Vec(alloc!(ctx, GcMem::ListMem(args)))
+    Expr::Vec(alloc!(ctx, GcMem::VecMem(args)))
 }
 
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {
