@@ -17,13 +17,13 @@ pub struct FuncInner {
     pub scope: Alloc,
 }
 
-pub struct VecObject {
-    inner: HAMT<usize, RefCell<Expr>>,
+pub struct VecObject<T: Sized + Clone> {
+    inner: HAMT<usize, RefCell<T>>,
     length: usize,
 }
 
-impl VecObject {
-    pub fn new() -> VecObject {
+impl<T: Sized + Clone> VecObject<T> {
+    pub fn new() -> VecObject<T> {
         VecObject {
             inner: HAMT::new(),
             length: 0,
@@ -34,7 +34,7 @@ impl VecObject {
         self.length
     }
 
-    pub fn new_from(mut input: Vec<Expr>) -> VecObject {
+    pub fn new_from(mut input: Vec<T>) -> VecObject<T> {
         let mut vec = VecObject::new();
         let len = input.len();
         for i in 0..len {
@@ -44,18 +44,25 @@ impl VecObject {
         vec
     }
 
-    pub fn get<F: Fn(&RefCell<Expr>) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
+    pub fn get<F: Fn(&RefCell<T>) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
         self.inner.search(&key, callback)
     }
 
-    pub fn push(&mut self, item: Expr) {
+    pub fn push(&mut self, item: T) {
         self.inner.insert(self.length, RefCell::new(item));
         self.length += 1;
+    }
+
+    pub fn pop(&mut self) {
+        if self.length > 0 {
+            self.length -= 1;
+            self.inner.remove(self.length);
+        }
     }
 }
 
 pub enum GcMem {
-    VecMem(VecObject),
+    VecMem(VecObject<Expr>),
     FuncMem(FuncInner),
     SpecialMem(Box<SpecialFn>),
     ScopeMem(Scope),
@@ -75,14 +82,14 @@ impl fmt::Debug for GcMem {
 }
 
 impl GcMem {
-    pub fn as_vec(&self) -> &VecObject {
+    pub fn as_vec(&self) -> &VecObject<Expr> {
         match self {
             &GcMem::VecMem(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
-    pub fn as_vec_mut(&mut self) -> &mut VecObject {
+    pub fn as_vec_mut(&mut self) -> &mut VecObject<Expr> {
         match self {
             &mut GcMem::VecMem(ref mut inner) => inner,
             _ => unimplemented!(),
@@ -159,7 +166,7 @@ impl Expr {
         }
     }
 
-    pub fn as_vec<'a>(&'a self) -> Ref<'a, VecObject> {
+    pub fn as_vec<'a>(&'a self) -> Ref<'a, VecObject<Expr>> {
         match self {
             &Expr::Vec(ref inner) => {
                 Ref::map(inner.borrow(), |x| {
@@ -170,7 +177,7 @@ impl Expr {
         }
     }
 
-    pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, VecObject> {
+    pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, VecObject<Expr>> {
         match self {
             &mut Expr::Vec(ref mut inner) => {
                 RefMut::map(inner.borrow_mut(), |x| {
@@ -213,23 +220,29 @@ impl Expr {
     }
 }
 
+pub struct ContextState {
+    pub alloc: AllocArena,
+    pub roots: VecObject<Alloc>,
+}
+
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
-    pub alloc: AllocArena,
-    pub roots: Vec<Alloc>,
+    pub state: ContextState,
 }
 
 impl Context {
     pub fn new() -> Context {
         Context {
             callstack: vec![],
-            alloc: AllocArena::new(),
-            roots: vec![],
+            state: ContextState {
+                alloc: AllocArena::new(),
+                roots: VecObject::new(),
+            }
         }
     }
 
     pub fn pin(&mut self, item: AllocInterior) -> Alloc {
-        self.alloc.pin(item)
+        self.state.alloc.pin(item)
     }
 
     pub fn mark_expr(value: &mut Expr) {
@@ -298,10 +311,14 @@ impl Context {
     }
 
     pub fn mark_roots(&mut self) {
-        for scope in &mut self.roots {
-            if !scope.marked {
-                Context::mark(scope);
-            }
+        let len = self.state.roots.len();
+        for i in 0..len {
+            self.state.roots.get(i, |value| {
+                let mut root = value.borrow_mut();
+                if !root.marked {
+                    Context::mark(&mut *root);
+                }
+            });
         }
     }
 }
@@ -374,7 +391,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 })
                 .expect(&format!("Could not eval unknown atom {:?}", x));
 
-            ctx.roots.push(scope.clone());
+            ctx.state.roots.push(scope.clone());
 
             ctx.callstack.push((FuncFnId("0x0".to_owned()), false));
             let args: Vec<Expr> = args.into_iter()
@@ -399,7 +416,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 Expr::Null
             };
 
-            ctx.roots.pop();
+            ctx.state.roots.pop();
             ret
         }
         _ => {

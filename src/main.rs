@@ -26,12 +26,12 @@ fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
     //println!("----------");
     //println!("*** allocated objects: {:?}", ctx.alloc.size());
 
-    ctx.alloc.reset();
+    ctx.state.alloc.reset();
     //println!("*** marking child...");
     //Context::mark(&mut scope); // This is redundant b/c context eval y
     //println!("*** marking parent...");
     ctx.mark_roots();
-    ctx.alloc.sweep();
+    ctx.state.alloc.sweep();
 
     //println!("*** after cleanup: {:?}", ctx.alloc.size());
     //println!("----------");
@@ -347,7 +347,7 @@ fn run() -> io::Result<()> {
     let mut ctx = Context::new();
     let s = Scope::new(&mut ctx, None);
     let s2 = s.clone();
-    ctx.roots.push(s.clone());
+    ctx.state.roots.push(s.clone());
     {
         let mut s = s.borrow_mut();
         let mut s = s.as_scope();
@@ -389,7 +389,7 @@ fn run() -> io::Result<()> {
     let _ = res;
     // println!("{:?}", res);
 
-    println!("*** final gc count: {:?}", ctx.alloc.size());
+    println!("*** final gc count: {:?}", ctx.state.alloc.size());
 
     Ok(())
 }
