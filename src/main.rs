@@ -24,18 +24,16 @@ use strfmt::strfmt;
 use std::thread;
 
 fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
-    /*
     //println!("----------");
     //println!("*** allocated objects: {:?}", ctx.alloc.size());
-    ctx.alloc.reset();
+    ctx.alloc.write().unwrap().reset();
     //println!("*** marking child...");
     //Context::mark(&mut scope); // This is redundant b/c context eval y
     //println!("*** marking parent...");
     ctx.mark_roots();
-    ctx.alloc.sweep();
+    ctx.alloc.write().unwrap().sweep();
     //println!("*** after cleanup: {:?}", ctx.alloc.size());
     //println!("----------");
-    */
 
     Expr::Null
 }
@@ -350,6 +348,7 @@ fn run() -> io::Result<()> {
     let new_roots = ctx.state.roots.clone();
     let new_alloc = ctx.alloc.clone();
     thread::spawn(move || {
+        return;
         loop {
             {
                 println!("roots check: {:?}", new_roots.len());

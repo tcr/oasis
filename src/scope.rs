@@ -281,10 +281,10 @@ impl Scope {
     }
 
     pub fn lookup<F, T>(&mut self, key: &Expr, mut inner: F) -> Option<T>
-        where F: Fn(Option<&mut Expr>) -> T
+        where F: Fn(Option<&Expr>) -> T
     {
         if let Some(value) = self.scope.search(key, |value| {
-            inner(Some(&mut *value.borrow_mut()))
+            inner(Some(&*value.borrow()))
         }) {
             Some(value)
         } else {
@@ -306,11 +306,11 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 .as_scope()
                 .lookup(&x, |value| {
                     match value {
-                        Some(&mut Expr::Func(ref mut func)) => {
+                        Some(&Expr::Func(ref func)) => {
                             AllocArena::mark(func);
                             (Some(func.clone()), None)
                         }
-                        Some(&mut Expr::Special(ref func)) => {
+                        Some(&Expr::Special(ref func)) => {
                             (None, Some(func.clone()))
                         }
                         Some(ref value) => {

@@ -221,7 +221,7 @@ impl AllocArena {
         }
     }
 
-    pub fn mark(value: &mut Alloc) {
+    pub fn mark(value: &Alloc) {
         //println!("marking start... {:?}", value);
         value.set_marked(true);
 
