@@ -24,6 +24,7 @@ use strfmt::strfmt;
 use std::thread;
 
 fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
+    /*
     //println!("----------");
     //println!("*** allocated objects: {:?}", ctx.alloc.size());
     ctx.alloc.reset();
@@ -34,6 +35,7 @@ fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
     ctx.alloc.sweep();
     //println!("*** after cleanup: {:?}", ctx.alloc.size());
     //println!("----------");
+    */
 
     Expr::Null
 }
@@ -345,19 +347,21 @@ fn run() -> io::Result<()> {
 
     let mut ctx = Context::new();
 
-    let new_alloc = ctx.state.roots.clone();
+    let new_roots = ctx.state.roots.clone();
+    let new_alloc = ctx.alloc.clone();
     thread::spawn(move || {
         loop {
-            println!("roots check: {:?}", new_alloc.len());
+            println!("roots check: {:?}", new_roots.len());
+            println!("alloc check: {:?}", new_alloc.read().unwrap().size());
             thread::sleep_ms(1000);
             //for i in 0..new_alloc.len() {
             //    new_alloc.get(i, |v| {
             //        println!("root {:?}", v);
             //    });
             //}
-            //new_alloc.inner.each(|k, v| {
-                //println!("key: {:?}", k);
-                //})
+            //new_roots.inner.each(|k, v| {
+            //    println!("key: {:?}", k);
+            //})
         }
     });
 
@@ -405,7 +409,7 @@ fn run() -> io::Result<()> {
     let _ = res;
     // println!("{:?}", res);
 
-    println!("*** final gc count: {:?}", ctx.alloc.size());
+    println!("*** final gc count: {:?}", ctx.alloc.read().unwrap().size());
 
     Ok(())
 }

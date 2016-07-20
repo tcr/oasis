@@ -1,7 +1,7 @@
 use ast::*;
 use alloc::*;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::collections::HashMap;
@@ -230,7 +230,7 @@ pub struct ContextState {
 
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
-    pub alloc: AllocArena,
+    pub alloc: Arc<RwLock<AllocArena>>,
     pub state: ContextState,
 }
 
@@ -238,7 +238,7 @@ impl Context {
     pub fn new() -> Context {
         Context {
             callstack: vec![],
-            alloc: AllocArena::new(),
+            alloc: Arc::new(RwLock::new(AllocArena::new())),
             state: ContextState {
                 roots: VecObject::new(),
             }

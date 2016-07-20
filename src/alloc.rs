@@ -15,13 +15,13 @@ pub type Alloc = AllocRef<AllocInterior>;
 macro_rules! alloc {
     ( $ctx:expr, $x:expr ) => {
         {
-            $ctx.alloc.pin(GcRef::new($x))
+            $ctx.alloc.write().unwrap().pin(GcRef::new($x))
         }
     };
 }
 
 pub struct AllocRef<T> {
-    ptr: *mut T,
+    ptr: *const T,
 }
 
 impl<T> PartialEq for AllocRef<T> {
@@ -62,13 +62,13 @@ impl<T> Deref for AllocRef<T> {
     }
 }
 
-impl<T> DerefMut for AllocRef<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        unsafe {
-            &mut *self.ptr
-        }
-    }
-}
+//impl<T> DerefMut for AllocRef<T> {
+//    fn deref_mut(&mut self) -> &mut T {
+//        unsafe {
+//            &mut *self.ptr
+//        }
+//    }
+//}
 
 pub struct GcRef<T> {
     inner: RefCell<T>,
@@ -125,6 +125,9 @@ impl<T> GcRef<T> {
 pub struct AllocArena {
     arena: Vec<*mut AllocInterior>,
 }
+
+unsafe impl Send for AllocArena { }
+unsafe impl Sync for AllocArena { }
 
 static mut ctx_tracker: usize = 0;
 
