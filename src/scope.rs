@@ -113,9 +113,9 @@ impl GcMem {
         }
     }
 
-    pub fn as_scope(&mut self) -> &mut Scope {
+    pub fn as_scope(&self) -> &Scope {
         match self {
-            &mut GcMem::ScopeMem(ref mut inner) => inner,
+            &GcMem::ScopeMem(ref inner) => inner,
             _ => panic!("Cannot dereference {:?}", self),
         }
     }
@@ -272,15 +272,15 @@ impl Scope {
         }))
     }
 
-    pub fn set(&mut self, key: Expr, value: Expr) {
+    pub fn set(&self, key: Expr, value: Expr) {
         self.scope.insert(key, RefCell::new(value));
     }
 
-    pub fn set_atom(&mut self, key: &str, value: Expr) {
+    pub fn set_atom(&self, key: &str, value: Expr) {
         self.scope.insert(Expr::Atom(key.to_owned()), RefCell::new(value));
     }
 
-    pub fn lookup<F, T>(&mut self, key: &Expr, mut inner: F) -> Option<T>
+    pub fn lookup<F, T>(&self, key: &Expr, mut inner: F) -> Option<T>
         where F: Fn(Option<&Expr>) -> T
     {
         if let Some(value) = self.scope.search(key, |value| {
@@ -290,7 +290,7 @@ impl Scope {
         } else {
             match self.parent {
                 Some(ref parent) => {
-                    parent.borrow_mut().as_scope().lookup(key, inner)
+                    parent.borrow().as_scope().lookup(key, inner)
                 }
                 None => None,
             }
@@ -365,7 +365,7 @@ pub fn eval(ctx: &mut Context, scope: Alloc, expr: Expr) -> Expr {
             eval_expr(ctx, scope, term, args)
         }
         Expr::Atom(..) => {
-            scope.borrow_mut()
+            scope.borrow()
                 .as_scope()
                 .lookup(&expr, |x| {
                     if let Some(inner) = x {

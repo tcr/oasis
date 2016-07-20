@@ -41,7 +41,7 @@ fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
 fn special_def(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = eval(ctx, scope.clone(), args.remove(0));
-    scope.borrow_mut().as_scope().set(key, value);
+    scope.borrow().as_scope().set(key, value);
     Expr::Null
 }
 
