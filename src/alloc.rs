@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::cmp::Eq;
 use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicBool, Ordering};
 use scope::Expr;
 
 pub type AllocInterior = GcRef<GcMem>;
@@ -72,8 +73,8 @@ impl<T> DerefMut for AllocRef<T> {
 pub struct GcRef<T> {
     inner: RefCell<T>,
     pub debug_str: String,
-    marked: bool,
-    young: bool,
+    marked: AtomicBool,
+    young: AtomicBool,
 }
 
 impl<T> GcRef<T> {
@@ -82,9 +83,25 @@ impl<T> GcRef<T> {
         GcRef {
             inner: RefCell::new(item),
             debug_str: debug_str,
-            marked: false,
-            young: true,
+            marked: AtomicBool::new(false),
+            young: AtomicBool::new(true),
         }
+    }
+
+    pub fn marked(&self) -> bool {
+        self.marked.load(Ordering::Relaxed)
+    }
+
+    pub fn set_marked(&self, value: bool) {
+        self.marked.store(value, Ordering::Relaxed);
+    }
+
+    pub fn young(&self) -> bool {
+        self.young.load(Ordering::Relaxed)
+    }
+
+    pub fn set_young(&self, value: bool) {
+        self.young.store(value, Ordering::Relaxed);
     }
 
     pub fn borrow(&self) -> Ref<T> {
@@ -128,7 +145,7 @@ impl AllocArena {
     pub fn reset(&mut self) {
         for item in self.arena.iter_mut() {
             unsafe {
-                (**item).marked = false;
+                (**item).set_marked(false);
             }
         }
     }
@@ -137,10 +154,10 @@ impl AllocArena {
         self.arena.retain(|item| {
             unsafe {
                 // Switch youngness to not tag new elements.
-                let young = (**item).young;
-                (**item).young = false;
+                let young = (**item).young();
+                (**item).set_young(false);
 
-                if !young && (**item).marked == false {
+                if !young && (**item).marked() == false {
                     //println!("***  {:p} {:?}", &*(**item).borrow(), (**item).debug_str);
                     let container: Box<AllocInterior> = Box::from_raw(*item);
                     drop(container);
@@ -172,19 +189,19 @@ impl AllocArena {
     pub fn mark_expr(value: &mut Expr) {
         match value {
             &mut Expr::Func(ref mut inner) => {
-                if !inner.marked {
+                if !inner.marked() {
                     //println!("fn");
                     AllocArena::mark(inner);
                 }
             }
             &mut Expr::Special(ref mut inner) => {
-                if !inner.marked {
+                if !inner.marked() {
                     //println!("special");
                     AllocArena::mark(inner);
                 }
             }
             &mut Expr::Vec(ref mut inner) => {
-                if !inner.marked {
+                if !inner.marked() {
                     AllocArena::mark(inner);
                 }
             }
@@ -196,14 +213,14 @@ impl AllocArena {
 
     pub fn mark_refcell(value: &RefCell<Alloc>) {
         let mut root = value.borrow_mut();
-        if !root.marked {
+        if !root.marked() {
             AllocArena::mark(&mut *root);
         }
     }
 
     pub fn mark(value: &mut Alloc) {
         //println!("marking start... {:?}", value);
-        value.marked = true;
+        value.set_marked(true);
 
         if value.borrow_state() != BorrowState::Unused {
             //println!("*** active borrow state on mem, ignoring: {:?}", value.borrow_state())
@@ -220,7 +237,7 @@ impl AllocArena {
                     }
                     if let Some(ref mut parent) = inner.parent {
                         //println!("parent");
-                        if !parent.marked {
+                        if !parent.marked() {
                             AllocArena::mark(parent);
                         }
                         //println!("done parent");
