@@ -51,12 +51,12 @@ impl<T: Sized + Clone> VecObject<T> {
         self.inner.search(&key, callback)
     }
 
-    pub fn push(&mut self, item: T) {
+    pub fn push(&self, item: T) {
         let pos = self.length.fetch_add(1, Ordering::Relaxed);
         self.inner.insert(pos, RefCell::new(item));
     }
 
-    pub fn pop(&mut self) {
+    pub fn pop(&self) {
         if self.length.load(Ordering::Relaxed) > 0 {
             let new_len = self.length.fetch_sub(1, Ordering::Relaxed) - 1;
             self.inner.remove(new_len);
@@ -302,7 +302,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
     match x {
         Expr::Atom(..) => {
             let (func, special): (Option<AllocRef<_>>, Option<AllocRef<_>>) = scope
-                .borrow_mut()
+                .borrow()
                 .as_scope()
                 .lookup(&x, |value| {
                     match value {

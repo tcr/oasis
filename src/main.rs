@@ -24,6 +24,7 @@ use strfmt::strfmt;
 use std::thread;
 
 fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
+    /*
     //println!("----------");
     //println!("*** allocated objects: {:?}", ctx.alloc.size());
     ctx.alloc.write().unwrap().reset();
@@ -34,6 +35,7 @@ fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
     ctx.alloc.write().unwrap().sweep();
     //println!("*** after cleanup: {:?}", ctx.alloc.size());
     //println!("----------");
+    */
 
     Expr::Null
 }
@@ -107,7 +109,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
                 // Create inner function bindings.
                 let s2 = Scope::new(ctx, Some(parent_scope.clone()));
                 for (item, value) in names.iter().zip(args) {
-                    s2.borrow_mut().as_scope().set((*item).clone(), value.clone());
+                    s2.borrow().as_scope().set((*item).clone(), value.clone());
                 }
 
                 // Hold on for dear life. GC
@@ -164,7 +166,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     // Store unique closure ID.
     *outer_ref.write().unwrap() = Some(funcfn_id(&closure));
 
-    scope.borrow_mut().as_scope().set(key, Expr::Func(closure));
+    scope.borrow().as_scope().set(key, Expr::Func(closure));
     Expr::Null
 }
 
@@ -193,7 +195,7 @@ fn special_let(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
         let item = win[0].clone();
         let value = win[1].clone();
         let value = eval(ctx, s2.clone(), value);
-        s2.borrow_mut().as_scope().set(item, value);
+        s2.borrow().as_scope().set(item, value);
     }
 
     let mut res = Expr::Null;
@@ -348,7 +350,7 @@ fn run() -> io::Result<()> {
     let new_roots = ctx.state.roots.clone();
     let new_alloc = ctx.alloc.clone();
     thread::spawn(move || {
-        return;
+        //return;
         loop {
             {
                 println!("roots check: {:?}", new_roots.len());
@@ -383,7 +385,7 @@ fn run() -> io::Result<()> {
     let s2 = s.clone();
     ctx.state.roots.push(s.clone());
     {
-        let mut s = s.borrow_mut();
+        let mut s = s.borrow();
         let mut s = s.as_scope();
 
         s.set_atom("gc", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_gc)))));

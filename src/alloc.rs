@@ -189,21 +189,21 @@ impl AllocArena {
         self.arena.len()
     }
 
-    pub fn mark_expr(value: &mut Expr) {
+    pub fn mark_expr(value: &Expr) {
         match value {
-            &mut Expr::Func(ref mut inner) => {
+            &Expr::Func(ref inner) => {
                 if !inner.marked() {
                     //println!("fn");
                     AllocArena::mark(inner);
                 }
             }
-            &mut Expr::Special(ref mut inner) => {
+            &Expr::Special(ref inner) => {
                 if !inner.marked() {
                     //println!("special");
                     AllocArena::mark(inner);
                 }
             }
-            &mut Expr::Vec(ref mut inner) => {
+            &Expr::Vec(ref inner) => {
                 if !inner.marked() {
                     AllocArena::mark(inner);
                 }
@@ -215,9 +215,9 @@ impl AllocArena {
     }
 
     pub fn mark_refcell(value: &RefCell<Alloc>) {
-        let mut root = value.borrow_mut();
+        let mut root = value.borrow();
         if !root.marked() {
-            AllocArena::mark(&mut *root);
+            AllocArena::mark(&*root);
         }
     }
 
@@ -228,17 +228,21 @@ impl AllocArena {
         if value.borrow_state() != BorrowState::Unused {
             //println!("*** active borrow state on mem, ignoring: {:?}", value.borrow_state())
         } else {
-            match *value.borrow_mut() {
-                GcMem::ScopeMem(ref mut inner) => {
+            match *value.borrow() {
+                GcMem::ScopeMem(ref inner) => {
                     //println!("marking scope: {:?}", value);
+
+                    // Collect scope values.
                     let mut values = RefCell::new(vec![]);
                     inner.scope.each(|k, v| {
                         values.borrow_mut().push(v.clone());
                     });
+                    // Now mark them.
                     for value in values.into_inner() {
-                        AllocArena::mark_expr(&mut *value.borrow_mut());
+                        AllocArena::mark_expr(&*value.borrow());
                     }
-                    if let Some(ref mut parent) = inner.parent {
+
+                    if let Some(ref parent) = inner.parent {
                         //println!("parent");
                         if !parent.marked() {
                             AllocArena::mark(parent);
@@ -246,15 +250,15 @@ impl AllocArena {
                         //println!("done parent");
                     }
                 }
-                GcMem::VecMem(ref mut inner) => {
+                GcMem::VecMem(ref inner) => {
                     for i in 0..inner.len() {
                         inner.get(i, |value| {
-                            AllocArena::mark_expr(&mut *value.borrow_mut());
+                            AllocArena::mark_expr(&*value.borrow());
                         });
                     }
                 }
-                GcMem::FuncMem(ref mut inner) => {
-                    AllocArena::mark(&mut inner.scope);
+                GcMem::FuncMem(ref inner) => {
+                    AllocArena::mark(&inner.scope);
                 }
                 _ => { }
             }
