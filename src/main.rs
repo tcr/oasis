@@ -351,8 +351,23 @@ fn run() -> io::Result<()> {
     let new_alloc = ctx.alloc.clone();
     thread::spawn(move || {
         loop {
-            println!("roots check: {:?}", new_roots.len());
-            println!("alloc check: {:?}", new_alloc.read().unwrap().size());
+            {
+                println!("roots check: {:?}", new_roots.len());
+                println!("alloc check: {:?}", new_alloc.read().unwrap().size());
+            }
+
+            {
+                let mut arena = new_alloc.write().unwrap();
+                arena.reset();
+                let len = new_roots.len();
+                for i in 0..len {
+                    new_roots.get(i, |value| {
+                        AllocArena::mark_refcell(value);
+                    });
+                }
+                arena.sweep();
+            }
+
             thread::sleep_ms(1000);
             //for i in 0..new_alloc.len() {
             //    new_alloc.get(i, |v| {
