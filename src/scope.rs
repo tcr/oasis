@@ -1,6 +1,8 @@
 use ast::*;
 use alloc::*;
 use std::fmt;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::collections::HashMap;
 use ctrie::hamt::HAMT;
@@ -17,21 +19,22 @@ pub struct FuncInner {
     pub scope: Alloc,
 }
 
+#[derive(Clone)]
 pub struct VecObject<T: Sized + Clone> {
-    inner: HAMT<usize, RefCell<T>>,
-    length: usize,
+    pub inner: HAMT<usize, RefCell<T>>, //TODO not pub
+    length: Arc<AtomicUsize>,
 }
 
 impl<T: Sized + Clone> VecObject<T> {
     pub fn new() -> VecObject<T> {
         VecObject {
             inner: HAMT::new(),
-            length: 0,
+            length: Arc::new(AtomicUsize::new(0)),
         }
     }
 
     pub fn len(&self) -> usize {
-        self.length
+        self.length.load(Ordering::Relaxed)
     }
 
     pub fn new_from(mut input: Vec<T>) -> VecObject<T> {
@@ -40,7 +43,7 @@ impl<T: Sized + Clone> VecObject<T> {
         for i in 0..len {
             vec.inner.insert(i, RefCell::new(input.remove(0)));
         }
-        vec.length = len;
+        vec.length.store(len, Ordering::Relaxed);
         vec
     }
 
@@ -49,14 +52,14 @@ impl<T: Sized + Clone> VecObject<T> {
     }
 
     pub fn push(&mut self, item: T) {
-        self.inner.insert(self.length, RefCell::new(item));
-        self.length += 1;
+        let pos = self.length.fetch_add(1, Ordering::Relaxed);
+        self.inner.insert(pos, RefCell::new(item));
     }
 
     pub fn pop(&mut self) {
-        if self.length > 0 {
-            self.length -= 1;
-            self.inner.remove(self.length);
+        if self.length.load(Ordering::Relaxed) > 0 {
+            let new_len = self.length.fetch_sub(1, Ordering::Relaxed) - 1;
+            self.inner.remove(new_len);
         }
     }
 }
@@ -220,13 +223,14 @@ impl Expr {
     }
 }
 
+#[derive(Clone)]
 pub struct ContextState {
-    pub alloc: AllocArena,
     pub roots: VecObject<Alloc>,
 }
 
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
+    pub alloc: AllocArena,
     pub state: ContextState,
 }
 
@@ -234,78 +238,9 @@ impl Context {
     pub fn new() -> Context {
         Context {
             callstack: vec![],
+            alloc: AllocArena::new(),
             state: ContextState {
-                alloc: AllocArena::new(),
                 roots: VecObject::new(),
-            }
-        }
-    }
-
-    pub fn pin(&mut self, item: AllocInterior) -> Alloc {
-        self.state.alloc.pin(item)
-    }
-
-    pub fn mark_expr(value: &mut Expr) {
-        match value {
-            &mut Expr::Func(ref mut inner) => {
-                if !inner.marked {
-                    //println!("fn");
-                    Context::mark(inner);
-                }
-            }
-            &mut Expr::Special(ref mut inner) => {
-                if !inner.marked {
-                    //println!("special");
-                    Context::mark(inner);
-                }
-            }
-            &mut Expr::Vec(ref mut inner) => {
-                if !inner.marked {
-                    Context::mark(inner);
-                }
-            }
-            _ => {
-                //println!("???");
-            }
-        }
-    }
-
-    pub fn mark(value: &mut Alloc) {
-        //println!("marking start... {:?}", value);
-        value.marked = true;
-
-        if value.borrow_state() != BorrowState::Unused {
-            //println!("*** active borrow state on mem, ignoring: {:?}", value.borrow_state())
-        } else {
-            match *value.borrow_mut() {
-                GcMem::ScopeMem(ref mut inner) => {
-                    //println!("marking scope: {:?}", value);
-                    let mut values = RefCell::new(vec![]);
-                    inner.scope.each(|k, v| {
-                        values.borrow_mut().push(v.clone());
-                    });
-                    for value in values.into_inner() {
-                        Context::mark_expr(&mut *value.borrow_mut());
-                    }
-                    if let Some(ref mut parent) = inner.parent {
-                        //println!("parent");
-                        if !parent.marked {
-                            Context::mark(parent);
-                        }
-                        //println!("done parent");
-                    }
-                }
-                GcMem::VecMem(ref mut inner) => {
-                    for i in 0..inner.len() {
-                        inner.get(i, |value| {
-                            Context::mark_expr(&mut *value.borrow_mut());
-                        });
-                    }
-                }
-                GcMem::FuncMem(ref mut inner) => {
-                    Context::mark(&mut inner.scope);
-                }
-                _ => { }
             }
         }
     }
@@ -314,10 +249,7 @@ impl Context {
         let len = self.state.roots.len();
         for i in 0..len {
             self.state.roots.get(i, |value| {
-                let mut root = value.borrow_mut();
-                if !root.marked {
-                    Context::mark(&mut *root);
-                }
+                AllocArena::mark_refcell(value);
             });
         }
     }
@@ -328,7 +260,7 @@ pub fn funcfn_id(closure: &Alloc) -> FuncFnId {
 }
 
 pub struct Scope {
-    parent: Option<Alloc>,
+    pub parent: Option<Alloc>,
     pub scope: HAMT<Expr, RefCell<Expr>>,
 }
 
@@ -375,7 +307,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 .lookup(&x, |value| {
                     match value {
                         Some(&mut Expr::Func(ref mut func)) => {
-                            Context::mark(func);
+                            AllocArena::mark(func);
                             (Some(func.clone()), None)
                         }
                         Some(&mut Expr::Special(ref func)) => {

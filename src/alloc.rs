@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::cmp::Eq;
 use std::ops::{Deref, DerefMut};
+use scope::Expr;
 
 pub type AllocInterior = GcRef<GcMem>;
 pub type Alloc = AllocRef<AllocInterior>;
@@ -13,7 +14,7 @@ pub type Alloc = AllocRef<AllocInterior>;
 macro_rules! alloc {
     ( $ctx:expr, $x:expr ) => {
         {
-            $ctx.pin(GcRef::new($x))
+            $ctx.alloc.pin(GcRef::new($x))
         }
     };
 }
@@ -71,8 +72,8 @@ impl<T> DerefMut for AllocRef<T> {
 pub struct GcRef<T> {
     inner: RefCell<T>,
     pub debug_str: String,
-    pub marked: bool,
-    pub young: bool,
+    marked: bool,
+    young: bool,
 }
 
 impl<T> GcRef<T> {
@@ -166,5 +167,77 @@ impl AllocArena {
     /// Rough, poor estimate for arena size.
     pub fn size(&self) -> usize {
         self.arena.len()
+    }
+
+    pub fn mark_expr(value: &mut Expr) {
+        match value {
+            &mut Expr::Func(ref mut inner) => {
+                if !inner.marked {
+                    //println!("fn");
+                    AllocArena::mark(inner);
+                }
+            }
+            &mut Expr::Special(ref mut inner) => {
+                if !inner.marked {
+                    //println!("special");
+                    AllocArena::mark(inner);
+                }
+            }
+            &mut Expr::Vec(ref mut inner) => {
+                if !inner.marked {
+                    AllocArena::mark(inner);
+                }
+            }
+            _ => {
+                //println!("???");
+            }
+        }
+    }
+
+    pub fn mark_refcell(value: &RefCell<Alloc>) {
+        let mut root = value.borrow_mut();
+        if !root.marked {
+            AllocArena::mark(&mut *root);
+        }
+    }
+
+    pub fn mark(value: &mut Alloc) {
+        //println!("marking start... {:?}", value);
+        value.marked = true;
+
+        if value.borrow_state() != BorrowState::Unused {
+            //println!("*** active borrow state on mem, ignoring: {:?}", value.borrow_state())
+        } else {
+            match *value.borrow_mut() {
+                GcMem::ScopeMem(ref mut inner) => {
+                    //println!("marking scope: {:?}", value);
+                    let mut values = RefCell::new(vec![]);
+                    inner.scope.each(|k, v| {
+                        values.borrow_mut().push(v.clone());
+                    });
+                    for value in values.into_inner() {
+                        AllocArena::mark_expr(&mut *value.borrow_mut());
+                    }
+                    if let Some(ref mut parent) = inner.parent {
+                        //println!("parent");
+                        if !parent.marked {
+                            AllocArena::mark(parent);
+                        }
+                        //println!("done parent");
+                    }
+                }
+                GcMem::VecMem(ref mut inner) => {
+                    for i in 0..inner.len() {
+                        inner.get(i, |value| {
+                            AllocArena::mark_expr(&mut *value.borrow_mut());
+                        });
+                    }
+                }
+                GcMem::FuncMem(ref mut inner) => {
+                    AllocArena::mark(&mut inner.scope);
+                }
+                _ => { }
+            }
+        }
     }
 }

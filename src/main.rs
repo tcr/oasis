@@ -21,18 +21,17 @@ use std::mem;
 use std::env;
 use std::fs::File;
 use strfmt::strfmt;
+use std::thread;
 
 fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
     //println!("----------");
     //println!("*** allocated objects: {:?}", ctx.alloc.size());
-
-    ctx.state.alloc.reset();
+    ctx.alloc.reset();
     //println!("*** marking child...");
     //Context::mark(&mut scope); // This is redundant b/c context eval y
     //println!("*** marking parent...");
     ctx.mark_roots();
-    ctx.state.alloc.sweep();
-
+    ctx.alloc.sweep();
     //println!("*** after cleanup: {:?}", ctx.alloc.size());
     //println!("----------");
 
@@ -345,6 +344,23 @@ fn run() -> io::Result<()> {
     let ast = lisp::parse_Exprs(&content).unwrap();
 
     let mut ctx = Context::new();
+
+    let new_alloc = ctx.state.roots.clone();
+    thread::spawn(move || {
+        loop {
+            println!("roots check: {:?}", new_alloc.len());
+            thread::sleep_ms(1000);
+            //for i in 0..new_alloc.len() {
+            //    new_alloc.get(i, |v| {
+            //        println!("root {:?}", v);
+            //    });
+            //}
+            //new_alloc.inner.each(|k, v| {
+                //println!("key: {:?}", k);
+                //})
+        }
+    });
+
     let s = Scope::new(&mut ctx, None);
     let s2 = s.clone();
     ctx.state.roots.push(s.clone());
@@ -389,7 +405,7 @@ fn run() -> io::Result<()> {
     let _ = res;
     // println!("{:?}", res);
 
-    println!("*** final gc count: {:?}", ctx.state.alloc.size());
+    println!("*** final gc count: {:?}", ctx.alloc.size());
 
     Ok(())
 }
