@@ -162,8 +162,8 @@ impl AllocArena {
 
                 if !young && (**item).marked() == false {
                     //println!("***  {:p} {:?}", &*(**item).borrow(), (**item).debug_str);
-                    let container: Box<AllocInterior> = Box::from_raw(*item);
-                    drop(container);
+                    //TODO let container: Box<AllocInterior> = Box::from_raw(*item);
+                    //TODO drop(container);
                     false
                 } else {
                     true

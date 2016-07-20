@@ -365,6 +365,7 @@ pub fn eval(ctx: &mut Context, scope: Alloc, expr: Expr) -> Expr {
             eval_expr(ctx, scope, term, args)
         }
         Expr::Atom(..) => {
+            println!("why is scope scope {:?}", scope);
             scope.borrow()
                 .as_scope()
                 .lookup(&expr, |x| {

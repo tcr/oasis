@@ -369,7 +369,7 @@ fn run() -> io::Result<()> {
                 arena.sweep();
             }
 
-            thread::sleep_ms(1000);
+            thread::sleep_ms(10);
             //for i in 0..new_alloc.len() {
             //    new_alloc.get(i, |v| {
             //        println!("root {:?}", v);
