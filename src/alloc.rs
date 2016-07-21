@@ -71,17 +71,17 @@ impl<T> Deref for AllocRef<T> {
 //}
 
 pub struct GcRef<T> {
-    inner: RefCell<T>,
     pub debug_str: String,
     marked: AtomicBool,
     young: AtomicBool,
+    inner: T,
 }
 
 impl<T> GcRef<T> {
     pub fn new(item: T) -> GcRef<T> where T: Debug {
         let debug_str = format!("{:?}", item);
         GcRef {
-            inner: RefCell::new(item),
+            inner: item,
             debug_str: debug_str,
             marked: AtomicBool::new(false),
             young: AtomicBool::new(true),
@@ -104,17 +104,17 @@ impl<T> GcRef<T> {
         self.young.store(value, Ordering::Relaxed);
     }
 
-    pub fn borrow(&self) -> Ref<T> {
-        self.inner.borrow()
+    pub fn get<'a>(&'a self) -> &'a T {
+        &self.inner
     }
 
-    pub fn borrow_mut(&self) -> RefMut<T> {
-        self.inner.borrow_mut()
-    }
-
-    pub fn borrow_state(&self) -> BorrowState {
-        self.inner.borrow_state()
-    }
+    //pub fn borrow_mut(&self) -> RefMut<T> {
+    //    self.inner.borrow_mut()
+    //}
+    //
+    //pub fn borrow_state(&self) -> BorrowState {
+    //    self.inner.borrow_state()
+    //}
 
     pub fn id(&self) -> String {
         // TODO more unique IDs
@@ -225,11 +225,11 @@ impl AllocArena {
         //println!("marking start... {:?}", value);
         value.set_marked(true);
 
-        if value.borrow_state() != BorrowState::Unused {
+        //if value.borrow_state() != BorrowState::Unused {
             //println!("*** active borrow state on mem, ignoring: {:?}", value.borrow_state())
-        } else {
-            match *value.borrow() {
-                GcMem::ScopeMem(ref inner) => {
+        //} else {
+            match value.get() {
+                &GcMem::ScopeMem(ref inner) => {
                     //println!("marking scope: {:?}", value);
 
                     // Collect scope values.
@@ -250,18 +250,18 @@ impl AllocArena {
                         //println!("done parent");
                     }
                 }
-                GcMem::VecMem(ref inner) => {
+                &GcMem::VecMem(ref inner) => {
                     for i in 0..inner.len() {
                         inner.get(i, |value| {
                             AllocArena::mark_expr(&*value.borrow());
                         });
                     }
                 }
-                GcMem::FuncMem(ref inner) => {
+                &GcMem::FuncMem(ref inner) => {
                     AllocArena::mark(&inner.scope);
                 }
                 _ => { }
             }
-        }
+        //}
     }
 }

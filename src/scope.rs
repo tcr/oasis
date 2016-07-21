@@ -169,27 +169,24 @@ impl Expr {
         }
     }
 
-    pub fn as_vec<'a>(&'a self) -> Ref<'a, VecObject<Expr>> {
+    pub fn as_vec<'a>(&'a self) -> &'a VecObject<Expr> {
         match self {
-            &Expr::Vec(ref inner) => {
-                Ref::map(inner.borrow(), |x| {
-                    x.as_vec()
-                })
+            &Expr::Vec(ref alloc) => {
+                alloc.get().as_vec()
             }
             _ => panic!("Attempted to use {:?} as vec", self),
         }
     }
 
-    pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, VecObject<Expr>> {
-        match self {
-            &mut Expr::Vec(ref mut inner) => {
-                RefMut::map(inner.borrow_mut(), |x| {
-                    x.as_vec_mut()
-                })
-            }
-            _ => panic!("Attempted to use {:?} as mutable vec", self),
-        }
-    }
+    //pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, VecObject<Expr>> {
+    //    match self {
+    //        &mut Expr::Vec(ref mut alloc) => {
+    //            x.as_vec_mut()
+    //            })
+    //        }
+    //        _ => panic!("Attempted to use {:?} as mutable vec", self),
+    //    }
+    //}
 
     pub fn as_bool(&self) -> bool {
         match self {
@@ -290,7 +287,7 @@ impl Scope {
         } else {
             match self.parent {
                 Some(ref parent) => {
-                    parent.borrow().as_scope().lookup(key, inner)
+                    parent.get().as_scope().lookup(key, inner)
                 }
                 None => None,
             }
@@ -301,8 +298,7 @@ impl Scope {
 pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> Expr {
     match x {
         Expr::Atom(..) => {
-            let (func, special): (Option<AllocRef<_>>, Option<AllocRef<_>>) = scope
-                .borrow()
+            let (func, special): (Option<AllocRef<_>>, Option<AllocRef<_>>) = scope.get()
                 .as_scope()
                 .lookup(&x, |value| {
                     match value {
@@ -336,12 +332,12 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
             ctx.callstack.pop();
 
             let ret = if let Some(func) = func {
-                let call = func.borrow();
+                let call = func.get();
                 let call = call.as_func();
                 let call = &call.body;
                 call(ctx, args)
             } else if let Some(special) = special {
-                let call = special.borrow();
+                let call = special.get();
                 let call = call.as_special();
                 call(ctx, scope, args)
             } else {
@@ -365,8 +361,8 @@ pub fn eval(ctx: &mut Context, scope: Alloc, expr: Expr) -> Expr {
             eval_expr(ctx, scope, term, args)
         }
         Expr::Atom(..) => {
-            println!("why is scope scope {:?}", scope);
-            scope.borrow()
+            //println!("why is scope scope {:?}", scope);
+            scope.get()
                 .as_scope()
                 .lookup(&expr, |x| {
                     if let Some(inner) = x {
