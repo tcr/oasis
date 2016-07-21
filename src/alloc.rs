@@ -74,6 +74,7 @@ pub struct GcRef<T> {
     pub debug_str: String,
     marked: AtomicBool,
     young: AtomicBool,
+    freed: AtomicBool,
     inner: T,
 }
 
@@ -85,6 +86,7 @@ impl<T> GcRef<T> {
             debug_str: debug_str,
             marked: AtomicBool::new(false),
             young: AtomicBool::new(true),
+            freed: AtomicBool::new(false),
         }
     }
 
@@ -104,7 +106,18 @@ impl<T> GcRef<T> {
         self.young.store(value, Ordering::Relaxed);
     }
 
+    pub fn freed(&self) -> bool {
+        self.freed.load(Ordering::Relaxed)
+    }
+
+    pub fn set_freed(&self, value: bool) {
+        self.freed.store(value, Ordering::Relaxed);
+    }
+
     pub fn get<'a>(&'a self) -> &'a T {
+        if self.freed() {
+            panic!("Attempted to load freed object: {:p}", self);
+        }
         &self.inner
     }
 
@@ -164,6 +177,7 @@ impl AllocArena {
                     //println!("***  {:p} {:?}", &*(**item).borrow(), (**item).debug_str);
                     //TODO let container: Box<AllocInterior> = Box::from_raw(*item);
                     //TODO drop(container);
+                    (**item).set_freed(true);
                     false
                 } else {
                     true

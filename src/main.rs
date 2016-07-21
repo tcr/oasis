@@ -350,11 +350,10 @@ fn run() -> io::Result<()> {
     let new_roots = ctx.state.roots.clone();
     let new_alloc = ctx.alloc.clone();
     thread::spawn(move || {
-        return;
         loop {
             {
-                println!("roots check: {:?}", new_roots.len());
-                println!("alloc check: {:?}", new_alloc.read().unwrap().size());
+                //println!("roots check: {:?}", new_roots.len());
+                //println!("alloc check: {:?}", new_alloc.read().unwrap().size());
             }
 
             {
