@@ -116,6 +116,11 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
                 // TODO better to attach to current scope or something?
                 //s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, GcMem::VecMem(VecObject::new_from(content.clone())))));
 
+                //GC_ATTACH
+                let s3 = AllocRef::clone(&s2);
+                ctx.state.roots.push(s3);
+                s2.set_rooted(true);
+
                 let len = content.len();
                 for (i, statement) in content.iter().enumerate() {
                     // When we are evaluating the last statement, change our Context
@@ -133,6 +138,9 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
                     //    println!("inner2: {:?}", x);
                     //});
                 }
+
+                //GC_DETACH
+                ctx.state.roots.pop();
 
                 // Evaluate tail call expressions if they match this function.
                 if match res {
@@ -165,8 +173,8 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
 
     // Store unique closure ID.
     *outer_ref.write().unwrap() = Some(funcfn_id(&closure));
+    scope.get().as_scope().set(key, Expr::Func(closure.clone()));
 
-    scope.get().as_scope().set(key, Expr::Func(closure));
     Expr::Null
 }
 
@@ -198,10 +206,19 @@ fn special_let(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
         s2.get().as_scope().set(item, value);
     }
 
+    // GC_ATTACH
+    let s3 = AllocRef::clone(&s2);
+    ctx.state.roots.push(s3);
+    s2.set_rooted(true);
+
     let mut res = Expr::Null;
     for statement in content.iter() {
         res = eval(ctx, s2.clone(), statement.clone());
     }
+
+    // GC_DETACH
+    ctx.state.roots.pop();
+
     res
 }
 
@@ -353,7 +370,7 @@ fn run() -> io::Result<()> {
         loop {
             {
                 //println!("roots check: {:?}", new_roots.len());
-                //println!("alloc check: {:?}", new_alloc.read().unwrap().size());
+                println!("alloc check: {:?}", new_alloc.read().unwrap().size());
             }
 
             {
@@ -381,9 +398,13 @@ fn run() -> io::Result<()> {
     });
 
     let s = Scope::new(&mut ctx, None);
-    let s2 = s.clone();
+
+    // GC_ATTACH
     ctx.state.roots.push(s.clone());
+
     {
+        let s2 = s.clone();
+
         let mut s = s.get();
         let mut s = s.as_scope();
 

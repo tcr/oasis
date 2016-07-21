@@ -73,8 +73,9 @@ impl<T> Deref for AllocRef<T> {
 pub struct GcRef<T> {
     pub debug_str: String,
     marked: AtomicBool,
-    young: AtomicBool,
+    rooted: AtomicBool,
     freed: AtomicBool,
+    seen: AtomicBool,
     inner: T,
 }
 
@@ -85,8 +86,9 @@ impl<T> GcRef<T> {
             inner: item,
             debug_str: debug_str,
             marked: AtomicBool::new(false),
-            young: AtomicBool::new(true),
+            rooted: AtomicBool::new(false),
             freed: AtomicBool::new(false),
+            seen: AtomicBool::new(false),
         }
     }
 
@@ -98,12 +100,12 @@ impl<T> GcRef<T> {
         self.marked.store(value, Ordering::Relaxed);
     }
 
-    pub fn young(&self) -> bool {
-        self.young.load(Ordering::Relaxed)
+    pub fn rooted(&self) -> bool {
+        self.rooted.load(Ordering::Relaxed)
     }
 
-    pub fn set_young(&self, value: bool) {
-        self.young.store(value, Ordering::Relaxed);
+    pub fn set_rooted(&self, value: bool) {
+        self.rooted.store(value, Ordering::Relaxed);
     }
 
     pub fn freed(&self) -> bool {
@@ -114,9 +116,17 @@ impl<T> GcRef<T> {
         self.freed.store(value, Ordering::Relaxed);
     }
 
+    pub fn seen(&self) -> bool {
+        self.seen.load(Ordering::Relaxed)
+    }
+
+    pub fn set_seen(&self, value: bool) {
+        self.seen.store(value, Ordering::Relaxed);
+    }
+
     pub fn get<'a>(&'a self) -> &'a T {
         if self.freed() {
-            panic!("Attempted to load freed object: {:p}", self);
+            println!("Attempted to load freed object: {:p}", self);
         }
         &self.inner
     }
@@ -169,11 +179,11 @@ impl AllocArena {
     pub fn sweep(&mut self) {
         self.arena.retain(|item| {
             unsafe {
-                // Switch youngness to not tag new elements.
-                let young = (**item).young();
-                (**item).set_young(false);
+                let seen = (**item).seen();
+                (**item).set_seen(true);
 
-                if !young && (**item).marked() == false {
+                // Only drop complete and unmarked elements.
+                if seen && (**item).rooted() && (**item).marked() == false {
                     //println!("***  {:p} {:?}", &*(**item).borrow(), (**item).debug_str);
                     //TODO let container: Box<AllocInterior> = Box::from_raw(*item);
                     //TODO drop(container);

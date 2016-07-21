@@ -270,11 +270,17 @@ impl Scope {
     }
 
     pub fn set(&self, key: Expr, value: Expr) {
-        self.scope.insert(key, value);
+        self.scope.insert(key, value.clone());
+
+        // TODO probably cannot rely on this if detached from scope
+        if let Some(ref mem) = value.get_mem() {
+            // GC_ATTACH
+            mem.set_rooted(true);
+        }
     }
 
     pub fn set_atom(&self, key: &str, value: Expr) {
-        self.scope.insert(Expr::Atom(key.to_owned()), value);
+        self.set(Expr::Atom(key.to_owned()), value)
     }
 
     pub fn lookup<F, T>(&self, key: &Expr, mut inner: F) -> Option<T>
@@ -319,7 +325,9 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 })
                 .expect(&format!("Could not eval unknown atom {:?}", x));
 
+            // TODO delete attachment to root?
             ctx.state.roots.push(scope.clone());
+            //scope.set_completed(true)
 
             ctx.callstack.push((FuncFnId("0x0".to_owned()), false));
             let args: Vec<Expr> = args.into_iter()
