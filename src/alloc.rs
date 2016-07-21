@@ -214,13 +214,6 @@ impl AllocArena {
         }
     }
 
-    pub fn mark_refcell(value: &RefCell<Alloc>) {
-        let mut root = value.borrow();
-        if !root.marked() {
-            AllocArena::mark(&*root);
-        }
-    }
-
     pub fn mark(value: &Alloc) {
         //println!("marking start... {:?}", value);
         value.set_marked(true);
@@ -239,7 +232,7 @@ impl AllocArena {
                     });
                     // Now mark them.
                     for value in values.into_inner() {
-                        AllocArena::mark_expr(&*value.borrow());
+                        AllocArena::mark_expr(&value);
                     }
 
                     if let Some(ref parent) = inner.parent {
@@ -253,7 +246,7 @@ impl AllocArena {
                 &GcMem::VecMem(ref inner) => {
                     for i in 0..inner.len() {
                         inner.get(i, |value| {
-                            AllocArena::mark_expr(&*value.borrow());
+                            AllocArena::mark_expr(value);
                         });
                     }
                 }

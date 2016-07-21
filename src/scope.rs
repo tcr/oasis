@@ -21,7 +21,7 @@ pub struct FuncInner {
 
 #[derive(Clone)]
 pub struct VecObject<T: Sized + Clone> {
-    pub inner: HAMT<usize, RefCell<T>>, //TODO not pub
+    pub inner: HAMT<usize, T>, //TODO not pub
     length: Arc<AtomicUsize>,
 }
 
@@ -41,19 +41,19 @@ impl<T: Sized + Clone> VecObject<T> {
         let mut vec = VecObject::new();
         let len = input.len();
         for i in 0..len {
-            vec.inner.insert(i, RefCell::new(input.remove(0)));
+            vec.inner.insert(i, input.remove(0));
         }
         vec.length.store(len, Ordering::Relaxed);
         vec
     }
 
-    pub fn get<F: Fn(&RefCell<T>) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
+    pub fn get<F: Fn(&T) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
         self.inner.search(&key, callback)
     }
 
     pub fn push(&self, item: T) {
         let pos = self.length.fetch_add(1, Ordering::Relaxed);
-        self.inner.insert(pos, RefCell::new(item));
+        self.inner.insert(pos, item);
     }
 
     pub fn pop(&self) {
@@ -246,7 +246,7 @@ impl Context {
         let len = self.state.roots.len();
         for i in 0..len {
             self.state.roots.get(i, |value| {
-                AllocArena::mark_refcell(value);
+                AllocArena::mark(value);
             });
         }
     }
@@ -258,7 +258,7 @@ pub fn funcfn_id(closure: &Alloc) -> FuncFnId {
 
 pub struct Scope {
     pub parent: Option<Alloc>,
-    pub scope: HAMT<Expr, RefCell<Expr>>,
+    pub scope: HAMT<Expr, Expr>,
 }
 
 impl Scope {
@@ -270,18 +270,18 @@ impl Scope {
     }
 
     pub fn set(&self, key: Expr, value: Expr) {
-        self.scope.insert(key, RefCell::new(value));
+        self.scope.insert(key, value);
     }
 
     pub fn set_atom(&self, key: &str, value: Expr) {
-        self.scope.insert(Expr::Atom(key.to_owned()), RefCell::new(value));
+        self.scope.insert(Expr::Atom(key.to_owned()), value);
     }
 
     pub fn lookup<F, T>(&self, key: &Expr, mut inner: F) -> Option<T>
         where F: Fn(Option<&Expr>) -> T
     {
         if let Some(value) = self.scope.search(key, |value| {
-            inner(Some(&*value.borrow()))
+            inner(Some(value))
         }) {
             Some(value)
         } else {

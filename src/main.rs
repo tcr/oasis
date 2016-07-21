@@ -272,7 +272,7 @@ fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 
     let value_vec = value.as_vec();
     value_vec.get((key.as_int() as usize), |value| {
-        value.borrow().clone()
+        value.clone()
     }).unwrap_or(Expr::Null)
 }
 
@@ -363,7 +363,7 @@ fn run() -> io::Result<()> {
                 let len = new_roots.len();
                 for i in 0..len {
                     new_roots.get(i, |value| {
-                        AllocArena::mark_refcell(value);
+                        AllocArena::mark(value);
                     });
                 }
                 arena.sweep();
