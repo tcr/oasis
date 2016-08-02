@@ -214,31 +214,19 @@ impl AllocArena {
     }
 
     pub fn mark_expr(value: &Expr) {
-        match value {
-            &Expr::Func(ref inner) => {
-                if !inner.marked() {
-                    //println!("fn");
-                    AllocArena::mark(inner);
-                }
-            }
-            &Expr::Special(ref inner) => {
-                if !inner.marked() {
-                    //println!("special");
-                    AllocArena::mark(inner);
-                }
-            }
-            &Expr::Vec(ref inner) => {
-                if !inner.marked() {
-                    AllocArena::mark(inner);
-                }
-            }
-            _ => {
-                //println!("???");
-            }
+        if let Some(ref alloc) = value.get_mem() {
+            AllocArena::mark(alloc);
         }
     }
 
     pub fn mark(value: &Alloc) {
+        if value.freed() {
+            panic!("Attempted to mark freed object: {:?}", value.get());
+        }
+        if value.marked() {
+            return;
+        }
+
         //println!("marking start... {:?}", value);
         value.set_marked(true);
 
@@ -247,6 +235,7 @@ impl AllocArena {
         //} else {
             match value.get() {
                 &GcMem::ScopeMem(ref inner) => {
+                    println!("scope mem");
                     //println!("marking scope: {:?}", value);
 
                     // Collect scope values.
@@ -261,13 +250,12 @@ impl AllocArena {
 
                     if let Some(ref parent) = inner.parent {
                         //println!("parent");
-                        if !parent.marked() {
-                            AllocArena::mark(parent);
-                        }
+                        AllocArena::mark(parent);
                         //println!("done parent");
                     }
                 }
                 &GcMem::VecMem(ref inner) => {
+                    println!("vec mem");
                     for i in 0..inner.len() {
                         inner.get(i, |value| {
                             AllocArena::mark_expr(value);
@@ -275,6 +263,7 @@ impl AllocArena {
                     }
                 }
                 &GcMem::FuncMem(ref inner) => {
+                    println!("func mem");
                     AllocArena::mark(&inner.scope);
                 }
                 _ => { }

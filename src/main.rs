@@ -217,7 +217,7 @@ fn special_let(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     }
 
     // GC_DETACH
-    ctx.state.roots.pop();
+    //ctx.state.roots.pop();
 
     res
 }
