@@ -1,13 +1,7 @@
-use scope::Mem;
-use std::cell::{RefCell, Ref, RefMut, BorrowState};
-use std::fmt;
-use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
-use std::cmp::Eq;
-use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicBool, Ordering};
-use scope::Expr;
 use alloc::*;
+use scope::Expr;
+use scope::Mem;
+use std::cell::RefCell;
 
 pub type AllocInterior = GcRef<Mem>;
 pub type Alloc = AllocRef<AllocInterior>;
@@ -106,8 +100,8 @@ impl AllocArena {
                     //println!("marking scope: {:?}", value);
 
                     // Collect scope values.
-                    let mut values = RefCell::new(vec![]);
-                    inner.scope.each(|k, v| {
+                    let values = RefCell::new(vec![]);
+                    inner.scope.each(|_, v| {
                         values.borrow_mut().push(v.clone());
                     });
                     // Now mark them.

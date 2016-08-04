@@ -1,30 +1,30 @@
 // TODO https://github.com/ivanjovanovic/sicp/blob/master/2.3/2.3-binary-trees.scm
 // TODO http://www.stefankrause.net/wp/?p=14
 
-#![feature(borrow_state)]
-
+extern crate ctrie;
 extern crate rand;
 extern crate strfmt;
-extern crate ctrie;
 
 pub mod alloc;
 pub mod ast;
 pub mod gc;
-pub mod scope;
 pub mod lisp;
+pub mod scope;
 
+use alloc::*;
+use gc::*;
 use rand::Rng;
 use scope::*;
-use gc::*;
-use alloc::*;
 use std::collections::HashMap;
-use std::io::{self, Read};
-use std::mem;
 use std::env;
 use std::fs::File;
-use strfmt::strfmt;
+use std::io::{self, Read};
+use std::mem;
 use std::thread;
+use std::time::Duration;
+use strfmt::strfmt;
 
+#[allow(unused_variables, unused_mut)]
 fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
     /*
     //println!("----------");
@@ -64,7 +64,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let inner_ref: Rc<RwLock<Option<FuncFnId>>> = Rc::new(RwLock::new(None));
     let outer_ref = inner_ref.clone();
 
-    let debug_key = key.clone();
+    //let debug_key = key.clone();
 
     let content = args; // TODO ensure purity
     let closure: Alloc = ctx.allocate(Mem::FuncMem(FuncInner {
@@ -299,8 +299,9 @@ fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
 
     let value_vec = value.as_vec();
-    //TODO value_vec[0].clone()
-    Expr::Null
+    value_vec.get(0, |value| {
+        value.clone()
+    }).unwrap_or(Expr::Null)
 }
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -328,7 +329,7 @@ fn eval_println(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn eval_concat(_: &mut Context, mut args: Vec<Expr>) -> Expr {
-    let mut list = args.remove(0);
+    let list = args.remove(0);
     let add = args.remove(0);
 
     list.as_vec().push(add);
@@ -387,7 +388,7 @@ fn run() -> io::Result<()> {
                 arena.sweep();
             }
 
-            thread::sleep_ms(10);
+            thread::sleep(Duration::from_millis(10));
             //for i in 0..new_alloc.len() {
             //    new_alloc.get(i, |v| {
             //        println!("root {:?}", v);
@@ -407,8 +408,8 @@ fn run() -> io::Result<()> {
     {
         let s2 = s.clone();
 
-        let mut s = s.get();
-        let mut s = s.as_scope();
+        let s = s.get();
+        let s = s.as_scope();
 
         s.set_atom("gc", Expr::Special(ctx.allocate(Mem::wrap_special(Box::new(special_gc)))));
         s.set_atom("def", Expr::Special(ctx.allocate(Mem::SpecialMem(Box::new(special_def)))));

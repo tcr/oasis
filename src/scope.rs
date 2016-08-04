@@ -2,10 +2,7 @@ use alloc::*;
 use ast::*;
 use gc::*;
 use ctrie::hamt::HAMT;
-use std::cell::{RefCell, Ref, RefMut, BorrowState};
-use std::collections::HashMap;
 use std::fmt;
-use std::ops::Index;
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -39,7 +36,7 @@ impl<T: Sized + Clone> VecObject<T> {
     }
 
     pub fn new_from(mut input: Vec<T>) -> VecObject<T> {
-        let mut vec = VecObject::new();
+        let vec = VecObject::new();
         let len = input.len();
         for i in 0..len {
             vec.inner.insert(i, input.remove(0));
@@ -292,7 +289,7 @@ impl Scope {
         self.set(Expr::Atom(key.to_owned()), value)
     }
 
-    pub fn lookup<F, T>(&self, key: &Expr, mut inner: F) -> Option<T>
+    pub fn lookup<F, T>(&self, key: &Expr, inner: F) -> Option<T>
         where F: Fn(Option<&Expr>) -> T
     {
         if let Some(value) = self.scope.search(key, |value| {

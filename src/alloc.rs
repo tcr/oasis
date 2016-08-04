@@ -1,12 +1,9 @@
-use scope::Mem;
-use std::cell::{RefCell, Ref, RefMut, BorrowState};
+use std::cmp::Eq;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
-use std::cmp::Eq;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
-use scope::Expr;
 
 pub struct AllocRef<T> {
     ptr: *const T,
