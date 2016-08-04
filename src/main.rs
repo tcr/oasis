@@ -9,11 +9,11 @@ pub mod alloc;
 pub mod ast;
 pub mod cvec;
 pub mod gc;
+pub mod gc_collector;
 pub mod lisp;
 pub mod scope;
 pub mod types;
 
-use alloc::*;
 use gc::*;
 use rand::Rng;
 use scope::*;
@@ -22,28 +22,8 @@ use std::env;
 use std::fs::File;
 use std::io::{self, Read};
 use std::mem;
-use std::thread;
-use std::time::Duration;
 use strfmt::strfmt;
 use types::OVec;
-
-#[allow(unused_variables, unused_mut)]
-fn special_gc(ctx: &mut Context, mut scope: Gc, _: Vec<Expr>) -> Expr {
-    /*
-    //println!("----------");
-    //println!("*** allocated objects: {:?}", ctx.alloc.size());
-    ctx.alloc.write().unwrap().reset();
-    //println!("*** marking child...");
-    //Context::mark(&mut scope); // This is redundant b/c context eval y
-    //println!("*** marking parent...");
-    ctx.mark_roots();
-    ctx.alloc.write().unwrap().sweep();
-    //println!("*** after cleanup: {:?}", ctx.alloc.size());
-    //println!("----------");
-    */
-
-    Expr::Null
-}
 
 fn special_def(ctx: &mut Context, scope: Gc, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
@@ -120,11 +100,6 @@ fn special_defn(ctx: &mut Context, scope: Gc, mut args: Vec<Expr>) -> Expr {
                 // Hold on for dear life. GC
                 // TODO better to attach to current scope or something?
                 //s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, Mem::VecMem(OVec::new_from(content.clone())))));
-
-                //GC_ATTACH
-                let s3 = AllocRef::clone(&s2);
-                ctx.state.roots.push(s3);
-                s2.set_rooted(true);
 
                 let len = content.len();
                 for (i, statement) in content.iter().enumerate() {
@@ -211,18 +186,10 @@ fn special_let(ctx: &mut Context, scope: Gc, mut args: Vec<Expr>) -> Expr {
         s2.get().as_scope().set(item, value);
     }
 
-    // GC_ATTACH
-    let s3 = AllocRef::clone(&s2);
-    ctx.state.roots.push(s3);
-    s2.set_rooted(true);
-
     let mut res = Expr::Null;
     for statement in content.iter() {
         res = eval(ctx, s2.clone(), statement.clone());
     }
-
-    // GC_DETACH
-    //ctx.state.roots.pop();
 
     res
 }
@@ -354,13 +321,10 @@ fn eval_len(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn main() {
-    run().unwrap();
+    run().expect("Runtime code failed with error.");
 }
 
 fn run() -> io::Result<()> {
-    //let mut content = String::new();
-    //try!(io::stdin().read_to_string(&mut content));
-
     let content_path = env::args().nth(1).unwrap();
     let mut f = try!(File::open(content_path));
     let mut content = String::new();
@@ -369,52 +333,12 @@ fn run() -> io::Result<()> {
     let ast = lisp::parse_Exprs(&content).unwrap();
 
     let mut ctx = Context::new();
-
-    let new_roots = ctx.state.roots.clone();
-    let new_alloc = ctx.alloc.clone();
-    thread::spawn(move || {
-        loop {
-            {
-                //println!("roots check: {:?}", new_roots.len());
-                println!("alloc check: {:?}", new_alloc.read().unwrap().size());
-            }
-
-            {
-                let mut arena = new_alloc.write().unwrap();
-                arena.reset();
-                let len = new_roots.len();
-                for i in 0..len {
-                    new_roots.get(i, |value| {
-                        GcArena::mark(value);
-                    });
-                }
-                arena.sweep();
-            }
-
-            thread::sleep(Duration::from_millis(10));
-            //for i in 0..new_alloc.len() {
-            //    new_alloc.get(i, |v| {
-            //        println!("root {:?}", v);
-            //    });
-            //}
-            //new_roots.inner.each(|k, v| {
-            //    println!("key: {:?}", k);
-            //})
-        }
-    });
-
     let s = Scope::new(&mut ctx, None);
-
-    // GC_ATTACH
-    ctx.state.roots.push(s.clone());
 
     {
         let s2 = s.clone();
+        let s = s.get().as_scope();
 
-        let s = s.get();
-        let s = s.as_scope();
-
-        s.set_atom("gc", Expr::Special(ctx.allocate(Mem::wrap_special(Box::new(special_gc)))));
         s.set_atom("def", Expr::Special(ctx.allocate(Mem::SpecialMem(Box::new(special_def)))));
         s.set_atom("defn", Expr::Special(ctx.allocate(Mem::SpecialMem(Box::new(special_defn)))));
         s.set_atom("if", Expr::Special(ctx.allocate(Mem::SpecialMem(Box::new(special_if)))));
@@ -444,14 +368,8 @@ fn run() -> io::Result<()> {
         res = eval(&mut ctx, s.clone(), statement);
     }
 
-    special_gc(&mut ctx, s.clone(), vec![]);
-    special_gc(&mut ctx, s.clone(), vec![]); // sweep final generation
-
-    // Uncomment to print final value.
+    // Ignore final return value.
     let _ = res;
-    // println!("{:?}", res);
-
-    println!("*** final gc count: {:?}", ctx.alloc.read().unwrap().size());
 
     Ok(())
 }

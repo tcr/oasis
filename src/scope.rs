@@ -231,12 +231,6 @@ impl Scope {
 
     pub fn set(&self, key: Expr, value: Expr) {
         self.scope.insert(key, value.clone());
-
-        // TODO probably cannot rely on this if detached from scope
-        if let Some(ref mem) = value.get_mem() {
-            // GC_ATTACH
-            mem.set_rooted(true);
-        }
     }
 
     pub fn set_atom(&self, key: &str, value: Expr) {
