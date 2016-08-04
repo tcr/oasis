@@ -1,12 +1,13 @@
-use ast::*;
 use alloc::*;
-use std::fmt;
-use std::sync::{Arc, RwLock};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use ast::*;
+use gc::*;
+use ctrie::hamt::HAMT;
 use std::cell::{RefCell, Ref, RefMut, BorrowState};
 use std::collections::HashMap;
-use ctrie::hamt::HAMT;
+use std::fmt;
 use std::ops::Index;
+use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FuncFnId(pub String);
@@ -64,7 +65,7 @@ impl<T: Sized + Clone> VecObject<T> {
     }
 }
 
-pub enum GcMem {
+pub enum Mem {
     VecMem(VecObject<Expr>),
     FuncMem(FuncInner),
     SpecialMem(Box<SpecialFn>),
@@ -72,63 +73,63 @@ pub enum GcMem {
     Deallocated,
 }
 
-impl fmt::Debug for GcMem {
+impl fmt::Debug for Mem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &GcMem::VecMem(..) => write!(f, "VecMem({:p})", self),
-            &GcMem::FuncMem(..) => write!(f, "FuncMem({:p})", self),
-            &GcMem::SpecialMem(..) => write!(f, "SpecialMem({:p})", self),
-            &GcMem::ScopeMem(..) => write!(f, "ScopeMem({:p})", self),
-            &GcMem::Deallocated => write!(f, "**DEALLOCATED**({:p})", self),
+            &Mem::VecMem(..) => write!(f, "VecMem({:p})", self),
+            &Mem::FuncMem(..) => write!(f, "FuncMem({:p})", self),
+            &Mem::SpecialMem(..) => write!(f, "SpecialMem({:p})", self),
+            &Mem::ScopeMem(..) => write!(f, "ScopeMem({:p})", self),
+            &Mem::Deallocated => write!(f, "**DEALLOCATED**({:p})", self),
         }
     }
 }
 
-impl GcMem {
+impl Mem {
     pub fn as_vec(&self) -> &VecObject<Expr> {
         match self {
-            &GcMem::VecMem(ref inner) => inner,
+            &Mem::VecMem(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
     pub fn as_vec_mut(&mut self) -> &mut VecObject<Expr> {
         match self {
-            &mut GcMem::VecMem(ref mut inner) => inner,
+            &mut Mem::VecMem(ref mut inner) => inner,
             _ => unimplemented!(),
         }
     }
 
     pub fn as_func(&self) -> &FuncInner {
         match self {
-            &GcMem::FuncMem(ref inner) => inner,
+            &Mem::FuncMem(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
     pub fn as_special(&self) -> &Box<SpecialFn> {
         match self {
-            &GcMem::SpecialMem(ref inner) => inner,
+            &Mem::SpecialMem(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
     pub fn as_scope(&self) -> &Scope {
         match self {
-            &GcMem::ScopeMem(ref inner) => inner,
+            &Mem::ScopeMem(ref inner) => inner,
             _ => panic!("Cannot dereference {:?}", self),
         }
     }
 
-    pub fn wrap_fn(target: Box<FuncFn>, scope: Alloc) -> GcMem {
-        GcMem::FuncMem(FuncInner {
+    pub fn wrap_fn(target: Box<FuncFn>, scope: Alloc) -> Mem {
+        Mem::FuncMem(FuncInner {
             body: target,
             scope: scope,
         })
     }
 
-    pub fn wrap_special(target: Box<SpecialFn>) -> GcMem {
-        GcMem::SpecialMem(target)
+    pub fn wrap_special(target: Box<SpecialFn>) -> Mem {
+        Mem::SpecialMem(target)
     }
 }
 
@@ -255,7 +256,7 @@ impl Context {
         }
     }
 
-    pub fn allocate(&self, value: GcMem) -> Alloc {
+    pub fn allocate(&self, value: Mem) -> Alloc {
         self.alloc.write().unwrap().pin(GcRef::new(value))
     }
 }
@@ -271,7 +272,7 @@ pub struct Scope {
 
 impl Scope {
     pub fn new(ctx: &mut Context, parent: Option<Alloc>) -> Alloc {
-        ctx.allocate(GcMem::ScopeMem(Scope {
+        ctx.allocate(Mem::ScopeMem(Scope {
             parent: parent,
             scope: HAMT::new(),
         }))
