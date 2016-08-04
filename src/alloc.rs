@@ -11,15 +11,6 @@ use scope::Expr;
 pub type AllocInterior = GcRef<GcMem>;
 pub type Alloc = AllocRef<AllocInterior>;
 
-/// Allocate objects.
-macro_rules! alloc {
-    ( $ctx:expr, $x:expr ) => {
-        {
-            $ctx.alloc.write().unwrap().pin(GcRef::new($x))
-        }
-    };
-}
-
 pub struct AllocRef<T> {
     ptr: *const T,
 }

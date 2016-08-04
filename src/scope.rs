@@ -126,6 +126,10 @@ impl GcMem {
             scope: scope,
         })
     }
+
+    pub fn wrap_special(target: Box<SpecialFn>) -> GcMem {
+        GcMem::SpecialMem(target)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -250,6 +254,10 @@ impl Context {
             });
         }
     }
+
+    pub fn allocate(&self, value: GcMem) -> Alloc {
+        self.alloc.write().unwrap().pin(GcRef::new(value))
+    }
 }
 
 pub fn funcfn_id(closure: &Alloc) -> FuncFnId {
@@ -263,7 +271,7 @@ pub struct Scope {
 
 impl Scope {
     pub fn new(ctx: &mut Context, parent: Option<Alloc>) -> Alloc {
-        alloc!(ctx, GcMem::ScopeMem(Scope {
+        ctx.allocate(GcMem::ScopeMem(Scope {
             parent: parent,
             scope: HAMT::new(),
         }))

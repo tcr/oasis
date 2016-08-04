@@ -65,7 +65,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     let debug_key = key.clone();
 
     let content = args; // TODO ensure purity
-    let closure: Alloc = alloc!(ctx, GcMem::FuncMem(FuncInner {
+    let closure: Alloc = ctx.allocate(GcMem::FuncMem(FuncInner {
         scope: scope.clone(),
         body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
             //println!("called fn (key {:?})", debug_key);
@@ -280,7 +280,7 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::Vec(alloc!(ctx, GcMem::VecMem(VecObject::new_from(args))))
+    Expr::Vec(ctx.allocate(GcMem::VecMem(VecObject::new_from(args))))
 }
 
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -303,7 +303,7 @@ fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
-    Expr::Vec(alloc!(ctx, GcMem::VecMem(VecObject::new_from(args))))
+    Expr::Vec(ctx.allocate(GcMem::VecMem(VecObject::new_from(args))))
 }
 
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {
@@ -408,28 +408,28 @@ fn run() -> io::Result<()> {
         let mut s = s.get();
         let mut s = s.as_scope();
 
-        s.set_atom("gc", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_gc)))));
-        s.set_atom("def", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_def)))));
-        s.set_atom("defn", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_defn)))));
-        s.set_atom("if", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_if)))));
-        s.set_atom("let", Expr::Special(alloc!(ctx, GcMem::SpecialMem(Box::new(special_let)))));
+        s.set_atom("gc", Expr::Special(ctx.allocate(GcMem::wrap_special(Box::new(special_gc)))));
+        s.set_atom("def", Expr::Special(ctx.allocate(GcMem::SpecialMem(Box::new(special_def)))));
+        s.set_atom("defn", Expr::Special(ctx.allocate(GcMem::SpecialMem(Box::new(special_defn)))));
+        s.set_atom("if", Expr::Special(ctx.allocate(GcMem::SpecialMem(Box::new(special_if)))));
+        s.set_atom("let", Expr::Special(ctx.allocate(GcMem::SpecialMem(Box::new(special_let)))));
 
-        s.set_atom("+", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_add), s2.clone()))));
-        s.set_atom("-", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_sub), s2.clone()))));
-        s.set_atom("*", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_mul), s2.clone()))));
-        s.set_atom("/", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_div), s2.clone()))));
-        s.set_atom("<<", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_bitshiftleft), s2.clone()))));
-        s.set_atom("=", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_eq), s2.clone()))));
-        s.set_atom("<", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_le), s2.clone()))));
-        s.set_atom("vec", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_vec), s2.clone()))));
-        s.set_atom("index", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_index), s2.clone()))));
-        s.set_atom("first", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_first), s2.clone()))));
-        s.set_atom("rest", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_rest), s2.clone()))));
-        s.set_atom("null?", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_nullq), s2.clone()))));
-        s.set_atom("println", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_println), s2.clone()))));
-        s.set_atom("concat", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_concat), s2.clone()))));
-        s.set_atom("random", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_random), s2.clone()))));
-        s.set_atom("len", Expr::Func(alloc!(ctx, GcMem::wrap_fn(Box::new(eval_len), s2.clone()))));
+        s.set_atom("+", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_add), s2.clone()))));
+        s.set_atom("-", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_sub), s2.clone()))));
+        s.set_atom("*", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_mul), s2.clone()))));
+        s.set_atom("/", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_div), s2.clone()))));
+        s.set_atom("<<", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_bitshiftleft), s2.clone()))));
+        s.set_atom("=", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_eq), s2.clone()))));
+        s.set_atom("<", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_le), s2.clone()))));
+        s.set_atom("vec", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_vec), s2.clone()))));
+        s.set_atom("index", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_index), s2.clone()))));
+        s.set_atom("first", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_first), s2.clone()))));
+        s.set_atom("rest", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_rest), s2.clone()))));
+        s.set_atom("null?", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_nullq), s2.clone()))));
+        s.set_atom("println", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_println), s2.clone()))));
+        s.set_atom("concat", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_concat), s2.clone()))));
+        s.set_atom("random", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_random), s2.clone()))));
+        s.set_atom("len", Expr::Func(ctx.allocate(GcMem::wrap_fn(Box::new(eval_len), s2.clone()))));
     }
 
     let mut res = Expr::Null;
