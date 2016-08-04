@@ -26,7 +26,7 @@ impl<T> OVec<T> {
 
     pub fn get<F: Fn(&T) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
         self.inner.get(key).map(|value| {
-            callback(&self.inner[key])
+            callback(&value)
         })
     }
 
@@ -59,7 +59,7 @@ impl<K: hash::Hash + cmp::Eq + Clone, V: Clone> OMap<K, V> {
     /// the function call.
     pub fn search<'a, R, F: Fn(&V) -> R + 'a>(&self, key: &K, callback: F) -> Option<R> {
         self.inner.get(key).map(|value| {
-            callback(&self.inner[key])
+            callback(&value)
         })
     }
 

@@ -203,7 +203,7 @@ impl Context {
     }
 
     pub fn allocate(&self, value: Mem) -> Gc {
-        self.alloc.write().unwrap().pin(GcRef::new(value))
+        self.alloc.write().unwrap().pin(value)
     }
 }
 
@@ -249,12 +249,11 @@ impl Scope {
 pub fn eval_expr(ctx: &mut Context, scope: Gc, x: Expr, args: Vec<Expr>) -> Expr {
     match x {
         Expr::Atom(..) => {
-            let (func, special): (Option<AllocRef<_>>, Option<AllocRef<_>>) = scope.get()
+            let (func, special): (Option<Gc>, Option<Gc>) = scope.get()
                 .as_scope()
                 .lookup(&x, |value| {
                     match value {
                         Some(&Expr::Func(ref func)) => {
-                            GcArena::mark(func);
                             (Some(func.clone()), None)
                         }
                         Some(&Expr::Special(ref func)) => {

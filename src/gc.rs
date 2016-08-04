@@ -2,22 +2,150 @@ use alloc::*;
 use scope::Expr;
 use scope::Mem;
 use std::cell::RefCell;
+use std::fmt::{self, Debug};
+use std::hash::{Hash, Hasher};
+use std::ops::Deref;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-pub type Gc = AllocRef<GcRef<Mem>>;
+pub struct GcState<T> {
+    pub debug_str: String,
+    marked: AtomicBool,
+    rooted: AtomicBool,
+    freed: AtomicBool,
+    seen: AtomicBool,
+    inner: T,
+}
+
+impl<T> GcState<T> {
+    pub fn new(item: T) -> GcState<T> where T: Debug {
+        let debug_str = format!("{:?}", item);
+        GcState {
+            inner: item,
+            debug_str: debug_str,
+            marked: AtomicBool::new(false),
+            rooted: AtomicBool::new(false),
+            freed: AtomicBool::new(false),
+            seen: AtomicBool::new(false),
+        }
+    }
+
+    pub fn marked(&self) -> bool {
+        self.marked.load(Ordering::Relaxed)
+    }
+
+    pub fn set_marked(&self, value: bool) {
+        self.marked.store(value, Ordering::Relaxed);
+    }
+
+    pub fn rooted(&self) -> bool {
+        self.rooted.load(Ordering::Relaxed)
+    }
+
+    pub fn set_rooted(&self, value: bool) {
+        self.rooted.store(value, Ordering::Relaxed);
+    }
+
+    pub fn freed(&self) -> bool {
+        self.freed.load(Ordering::Relaxed)
+    }
+
+    pub fn set_freed(&self, value: bool) {
+        self.freed.store(value, Ordering::Relaxed);
+    }
+
+    pub fn seen(&self) -> bool {
+        self.seen.load(Ordering::Relaxed)
+    }
+
+    pub fn set_seen(&self, value: bool) {
+        self.seen.store(value, Ordering::Relaxed);
+    }
+
+    pub fn get<'a>(&'a self) -> &'a T {
+        if self.freed() {
+            println!("Attempted to load freed object: {:p}", self);
+        }
+        &self.inner
+    }
+
+    //pub fn borrow_mut(&self) -> RefMut<T> {
+    //    self.inner.borrow_mut()
+    //}
+    //
+    //pub fn borrow_state(&self) -> BorrowState {
+    //    self.inner.borrow_state()
+    //}
+
+    pub fn id(&self) -> String {
+        // TODO more unique IDs
+        format!("{:p}", self)
+    }
+}
+
+pub struct Gc {
+    ptr: *const GcState<Mem>,
+}
+
+impl Gc {
+    pub fn new(ptr: *const GcState<Mem>) -> Gc {
+        Gc {
+            ptr: ptr
+        }
+    }
+}
+
+impl PartialEq for Gc {
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr == other.ptr
+    }
+}
+
+impl Eq for Gc { }
+
+impl fmt::Debug for Gc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Gc({:p})", self.ptr)
+    }
+}
+
+impl Hash for Gc {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.ptr.hash(state);
+    }
+}
+
+impl Clone for Gc {
+    fn clone(&self) -> Gc {
+        Gc {
+            ptr: self.ptr,
+        }
+    }
+}
+
+impl Deref for Gc {
+    type Target = GcState<Mem>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe {
+            &*self.ptr
+        }
+    }
+}
 
 pub struct GcArena {
-    arena: Vec<*mut GcRef<Mem>>,
+    arena: Vec<*mut GcState<Mem>>,
 }
 
 unsafe impl Send for GcArena { }
 unsafe impl Sync for GcArena { }
 
 impl Allocator for GcArena {
-    type RefType = GcRef<Mem>;
+    type RefType = Mem;
+    type RefOut = Gc;
 
-    fn pin(&mut self, item: GcRef<Mem>) -> Gc {
-        self.arena.push(Box::into_raw(Box::new(item)) as *mut _);
-        AllocRef::new(*self.arena.last().unwrap())
+    fn pin(&mut self, item: Mem) -> Gc {
+        self.arena.push(Box::into_raw(Box::new(GcState::new(item))) as *mut _);
+        Gc::new(*self.arena.last().unwrap())
     }
 }
 
@@ -45,7 +173,7 @@ impl GcArena {
                 // Only drop complete and unmarked elements.
                 if seen && (**item).rooted() && (**item).marked() == false {
                     //println!("***  {:p} {:?}", &*(**item).borrow(), (**item).debug_str);
-                    //TODO let container: Box<GcRef<Mem>> = Box::from_raw(*item);
+                    //TODO let container: Box<GcState<Mem>> = Box::from_raw(*item);
                     //TODO drop(container);
                     (**item).set_freed(true);
                     false

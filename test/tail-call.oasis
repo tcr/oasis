@@ -1,6 +1,4 @@
 (defn inner (m n)
-  (gc)
-  (gc)
   (if (< n m)
     m
     (inner (+ m 1) n)))
