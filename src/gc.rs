@@ -100,7 +100,7 @@ impl GcArena {
 
                     // Collect scope values.
                     let values = RefCell::new(vec![]);
-                    inner.scope.each(|_, v| {
+                    inner.scope.borrow().each(|_, v| {
                         values.borrow_mut().push(v.clone());
                     });
                     // Now mark them.

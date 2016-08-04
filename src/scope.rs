@@ -3,6 +3,7 @@ use ast::*;
 use gc::*;
 use types::{OVec, OMap};
 use std::fmt;
+use std::cell::RefCell;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -10,6 +11,10 @@ pub struct FuncFnId(pub String);
 
 pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
 pub type SpecialFn = Fn(&mut Context, Gc, Vec<Expr>) -> Expr;
+
+pub fn funcfn_id(closure: &Gc) -> FuncFnId {
+    FuncFnId(closure.id())
+}
 
 pub struct FuncInner {
     pub body: Box<FuncFn>,
@@ -134,16 +139,6 @@ impl Expr {
         }
     }
 
-    //pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, OVec<Expr>> {
-    //    match self {
-    //        &mut Expr::Vec(ref mut alloc) => {
-    //            x.as_vec_mut()
-    //            })
-    //        }
-    //        _ => panic!("Attempted to use {:?} as mutable vec", self),
-    //    }
-    //}
-
     pub fn as_bool(&self) -> bool {
         match self {
             &Expr::Int(0) | &Expr::Null => false,
@@ -212,25 +207,21 @@ impl Context {
     }
 }
 
-pub fn funcfn_id(closure: &Gc) -> FuncFnId {
-    FuncFnId(closure.id())
-}
-
 pub struct Scope {
     pub parent: Option<Gc>,
-    pub scope: OMap<Expr, Expr>,
+    pub scope: RefCell<OMap<Expr, Expr>>,
 }
 
 impl Scope {
     pub fn new(ctx: &mut Context, parent: Option<Gc>) -> Gc {
         ctx.allocate(Mem::ScopeMem(Scope {
             parent: parent,
-            scope: OMap::new(),
+            scope: RefCell::new(OMap::new()),
         }))
     }
 
     pub fn set(&self, key: Expr, value: Expr) {
-        self.scope.insert(key, value.clone());
+        self.scope.borrow_mut().insert(key, value.clone());
     }
 
     pub fn set_atom(&self, key: &str, value: Expr) {
@@ -240,7 +231,7 @@ impl Scope {
     pub fn lookup<F, T>(&self, key: &Expr, inner: F) -> Option<T>
         where F: Fn(Option<&Expr>) -> T
     {
-        if let Some(value) = self.scope.search(key, |value| {
+        if let Some(value) = self.scope.borrow().search(key, |value| {
             inner(Some(value))
         }) {
             Some(value)

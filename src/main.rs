@@ -9,7 +9,7 @@ pub mod alloc;
 pub mod ast;
 pub mod cvec;
 pub mod gc;
-pub mod gc_collector;
+//pub mod gc_collector;
 pub mod lisp;
 pub mod scope;
 pub mod types;
@@ -298,13 +298,13 @@ fn eval_println(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
-fn eval_concat(_: &mut Context, mut args: Vec<Expr>) -> Expr {
-    let list = args.remove(0);
-    let add = args.remove(0);
-
-    list.as_vec().push(add);
-    list
-}
+//fn eval_concat(_: &mut Context, mut args: Vec<Expr>) -> Expr {
+//    let list = args.remove(0);
+//    let add = args.remove(0);
+//
+//    list.as_vec().push(add);
+//    list
+//}
 
 fn eval_random(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let n = args.remove(0);
@@ -357,7 +357,7 @@ fn run() -> io::Result<()> {
         s.set_atom("rest", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_rest), s2.clone()))));
         s.set_atom("null?", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_nullq), s2.clone()))));
         s.set_atom("println", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_println), s2.clone()))));
-        s.set_atom("concat", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_concat), s2.clone()))));
+        //s.set_atom("concat", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_concat), s2.clone()))));
         s.set_atom("random", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_random), s2.clone()))));
         s.set_atom("len", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_len), s2.clone()))));
     }
