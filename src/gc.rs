@@ -3,28 +3,27 @@ use scope::Expr;
 use scope::Mem;
 use std::cell::RefCell;
 
-pub type AllocInterior = GcRef<Mem>;
-pub type Alloc = AllocRef<AllocInterior>;
+pub type Gc = AllocRef<GcRef<Mem>>;
 
-pub struct AllocArena {
-    arena: Vec<*mut AllocInterior>,
+pub struct GcArena {
+    arena: Vec<*mut GcRef<Mem>>,
 }
 
-unsafe impl Send for AllocArena { }
-unsafe impl Sync for AllocArena { }
+unsafe impl Send for GcArena { }
+unsafe impl Sync for GcArena { }
 
-impl Allocator for AllocArena {
-    type RefType = AllocInterior;
+impl Allocator for GcArena {
+    type RefType = GcRef<Mem>;
 
-    fn pin(&mut self, item: AllocInterior) -> Alloc {
+    fn pin(&mut self, item: GcRef<Mem>) -> Gc {
         self.arena.push(Box::into_raw(Box::new(item)) as *mut _);
         AllocRef::new(*self.arena.last().unwrap())
     }
 }
 
-impl AllocArena {
-    pub fn new() -> AllocArena {
-        AllocArena {
+impl GcArena {
+    pub fn new() -> GcArena {
+        GcArena {
             arena: vec![],
         }
     }
@@ -46,7 +45,7 @@ impl AllocArena {
                 // Only drop complete and unmarked elements.
                 if seen && (**item).rooted() && (**item).marked() == false {
                     //println!("***  {:p} {:?}", &*(**item).borrow(), (**item).debug_str);
-                    //TODO let container: Box<AllocInterior> = Box::from_raw(*item);
+                    //TODO let container: Box<GcRef<Mem>> = Box::from_raw(*item);
                     //TODO drop(container);
                     (**item).set_freed(true);
                     false
@@ -76,11 +75,11 @@ impl AllocArena {
 
     pub fn mark_expr(value: &Expr) {
         if let Some(ref alloc) = value.get_mem() {
-            AllocArena::mark(alloc);
+            GcArena::mark(alloc);
         }
     }
 
-    pub fn mark(value: &Alloc) {
+    pub fn mark(value: &Gc) {
         if value.freed() {
             panic!("Attempted to mark freed object: {:?}", value.get());
         }
@@ -106,12 +105,12 @@ impl AllocArena {
                     });
                     // Now mark them.
                     for value in values.into_inner() {
-                        AllocArena::mark_expr(&value);
+                        GcArena::mark_expr(&value);
                     }
 
                     if let Some(ref parent) = inner.parent {
                         //println!("parent");
-                        AllocArena::mark(parent);
+                        GcArena::mark(parent);
                         //println!("done parent");
                     }
                 }
@@ -119,13 +118,13 @@ impl AllocArena {
                     println!("vec mem");
                     for i in 0..inner.len() {
                         inner.get(i, |value| {
-                            AllocArena::mark_expr(value);
+                            GcArena::mark_expr(value);
                         });
                     }
                 }
                 &Mem::FuncMem(ref inner) => {
                     println!("func mem");
-                    AllocArena::mark(&inner.scope);
+                    GcArena::mark(&inner.scope);
                 }
                 _ => { }
             }

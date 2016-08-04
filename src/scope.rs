@@ -10,11 +10,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct FuncFnId(pub String);
 
 pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
-pub type SpecialFn = Fn(&mut Context, Alloc, Vec<Expr>) -> Expr;
+pub type SpecialFn = Fn(&mut Context, Gc, Vec<Expr>) -> Expr;
 
 pub struct FuncInner {
     pub body: Box<FuncFn>,
-    pub scope: Alloc,
+    pub scope: Gc,
 }
 
 #[derive(Clone)]
@@ -118,7 +118,7 @@ impl Mem {
         }
     }
 
-    pub fn wrap_fn(target: Box<FuncFn>, scope: Alloc) -> Mem {
+    pub fn wrap_fn(target: Box<FuncFn>, scope: Gc) -> Mem {
         Mem::FuncMem(FuncInner {
             body: target,
             scope: scope,
@@ -140,9 +140,9 @@ pub enum Expr {
     List(Vec<Expr>),
 
     // Allocations
-    Vec(Alloc),
-    Func(Alloc),
-    Special(Alloc),
+    Vec(Gc),
+    Func(Gc),
+    Special(Gc),
 }
 
 impl Expr {
@@ -212,7 +212,7 @@ impl Expr {
         }
     }
 
-    pub fn get_mem(&self) -> Option<&Alloc> {
+    pub fn get_mem(&self) -> Option<&Gc> {
         match self {
             &Expr::Vec(ref inner) => Some(inner),
             &Expr::Func(ref inner) => Some(inner),
@@ -224,12 +224,12 @@ impl Expr {
 
 #[derive(Clone)]
 pub struct ContextState {
-    pub roots: VecObject<Alloc>,
+    pub roots: VecObject<Gc>,
 }
 
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
-    pub alloc: Arc<RwLock<AllocArena>>,
+    pub alloc: Arc<RwLock<GcArena>>,
     pub state: ContextState,
 }
 
@@ -237,7 +237,7 @@ impl Context {
     pub fn new() -> Context {
         Context {
             callstack: vec![],
-            alloc: Arc::new(RwLock::new(AllocArena::new())),
+            alloc: Arc::new(RwLock::new(GcArena::new())),
             state: ContextState {
                 roots: VecObject::new(),
             }
@@ -248,27 +248,27 @@ impl Context {
         let len = self.state.roots.len();
         for i in 0..len {
             self.state.roots.get(i, |value| {
-                AllocArena::mark(value);
+                GcArena::mark(value);
             });
         }
     }
 
-    pub fn allocate(&self, value: Mem) -> Alloc {
+    pub fn allocate(&self, value: Mem) -> Gc {
         self.alloc.write().unwrap().pin(GcRef::new(value))
     }
 }
 
-pub fn funcfn_id(closure: &Alloc) -> FuncFnId {
+pub fn funcfn_id(closure: &Gc) -> FuncFnId {
     FuncFnId(closure.id())
 }
 
 pub struct Scope {
-    pub parent: Option<Alloc>,
+    pub parent: Option<Gc>,
     pub scope: HAMT<Expr, Expr>,
 }
 
 impl Scope {
-    pub fn new(ctx: &mut Context, parent: Option<Alloc>) -> Alloc {
+    pub fn new(ctx: &mut Context, parent: Option<Gc>) -> Gc {
         ctx.allocate(Mem::ScopeMem(Scope {
             parent: parent,
             scope: HAMT::new(),
@@ -307,7 +307,7 @@ impl Scope {
     }
 }
 
-pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> Expr {
+pub fn eval_expr(ctx: &mut Context, scope: Gc, x: Expr, args: Vec<Expr>) -> Expr {
     match x {
         Expr::Atom(..) => {
             let (func, special): (Option<AllocRef<_>>, Option<AllocRef<_>>) = scope.get()
@@ -315,7 +315,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
                 .lookup(&x, |value| {
                     match value {
                         Some(&Expr::Func(ref func)) => {
-                            AllocArena::mark(func);
+                            GcArena::mark(func);
                             (Some(func.clone()), None)
                         }
                         Some(&Expr::Special(ref func)) => {
@@ -367,7 +367,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Alloc, x: Expr, args: Vec<Expr>) -> E
     }
 }
 
-pub fn eval(ctx: &mut Context, scope: Alloc, expr: Expr) -> Expr {
+pub fn eval(ctx: &mut Context, scope: Gc, expr: Expr) -> Expr {
     match expr {
         Expr::List(args) => {
             let mut args = args.clone();

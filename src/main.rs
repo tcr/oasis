@@ -25,7 +25,7 @@ use std::time::Duration;
 use strfmt::strfmt;
 
 #[allow(unused_variables, unused_mut)]
-fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
+fn special_gc(ctx: &mut Context, mut scope: Gc, _: Vec<Expr>) -> Expr {
     /*
     //println!("----------");
     //println!("*** allocated objects: {:?}", ctx.alloc.size());
@@ -42,14 +42,14 @@ fn special_gc(ctx: &mut Context, mut scope: Alloc, _: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
-fn special_def(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
+fn special_def(ctx: &mut Context, scope: Gc, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = eval(ctx, scope.clone(), args.remove(0));
     scope.get().as_scope().set(key, value);
     Expr::Null
 }
 
-fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
+fn special_defn(ctx: &mut Context, scope: Gc, mut args: Vec<Expr>) -> Expr {
     use std::rc::Rc;
     use std::sync::RwLock;
 
@@ -67,7 +67,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     //let debug_key = key.clone();
 
     let content = args; // TODO ensure purity
-    let closure: Alloc = ctx.allocate(Mem::FuncMem(FuncInner {
+    let closure: Gc = ctx.allocate(Mem::FuncMem(FuncInner {
         scope: scope.clone(),
         body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
             //println!("called fn (key {:?})", debug_key);
@@ -180,7 +180,7 @@ fn special_defn(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
-fn special_if(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
+fn special_if(ctx: &mut Context, scope: Gc, mut args: Vec<Expr>) -> Expr {
     let if_val = args.remove(0);
     let then_val = args.remove(0);
     let else_val = args.remove(0);
@@ -192,7 +192,7 @@ fn special_if(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn special_let(ctx: &mut Context, scope: Alloc, mut args: Vec<Expr>) -> Expr {
+fn special_let(ctx: &mut Context, scope: Gc, mut args: Vec<Expr>) -> Expr {
     let bindings = if let Expr::List(content) = args.remove(0) {
         content
     } else {
@@ -382,7 +382,7 @@ fn run() -> io::Result<()> {
                 let len = new_roots.len();
                 for i in 0..len {
                     new_roots.get(i, |value| {
-                        AllocArena::mark(value);
+                        GcArena::mark(value);
                     });
                 }
                 arena.sweep();
