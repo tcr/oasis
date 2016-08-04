@@ -55,7 +55,7 @@ More:
 * LPRI: Pursure immutability (vecs vs lists)
 * Move to generic alloc system to switch between RefCell and GC?
 * Determine if scope benefits from append-only lists
-* Determine if HAMT is too much for a read-only list (no atomics?)
+* Determine if OMap is too much for a read-only list (no atomics?)
 * Determine if vectors can be simplified by ctries
 
 ## License

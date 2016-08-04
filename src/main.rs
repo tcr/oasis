@@ -7,9 +7,11 @@ extern crate strfmt;
 
 pub mod alloc;
 pub mod ast;
+pub mod cvec;
 pub mod gc;
 pub mod lisp;
 pub mod scope;
+pub mod types;
 
 use alloc::*;
 use gc::*;
@@ -23,6 +25,7 @@ use std::mem;
 use std::thread;
 use std::time::Duration;
 use strfmt::strfmt;
+use types::OVec;
 
 #[allow(unused_variables, unused_mut)]
 fn special_gc(ctx: &mut Context, mut scope: Gc, _: Vec<Expr>) -> Expr {
@@ -116,7 +119,7 @@ fn special_defn(ctx: &mut Context, scope: Gc, mut args: Vec<Expr>) -> Expr {
 
                 // Hold on for dear life. GC
                 // TODO better to attach to current scope or something?
-                //s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, Mem::VecMem(VecObject::new_from(content.clone())))));
+                //s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, Mem::VecMem(OVec::new_from(content.clone())))));
 
                 //GC_ATTACH
                 let s3 = AllocRef::clone(&s2);
@@ -282,7 +285,7 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::Vec(ctx.allocate(Mem::VecMem(VecObject::new_from(args))))
+    Expr::Vec(ctx.allocate(Mem::VecMem(OVec::new_from(args))))
 }
 
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -306,7 +309,7 @@ fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
-    Expr::Vec(ctx.allocate(Mem::VecMem(VecObject::new_from(args))))
+    Expr::Vec(ctx.allocate(Mem::VecMem(OVec::new_from(args))))
 }
 
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {

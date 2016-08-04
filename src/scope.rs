@@ -1,10 +1,9 @@
 use alloc::*;
 use ast::*;
 use gc::*;
-use ctrie::hamt::HAMT;
+use types::{OVec, OMap};
 use std::fmt;
 use std::sync::{Arc, RwLock};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FuncFnId(pub String);
@@ -17,53 +16,8 @@ pub struct FuncInner {
     pub scope: Gc,
 }
 
-#[derive(Clone)]
-pub struct VecObject<T: Sized + Clone> {
-    pub inner: HAMT<usize, T>, //TODO not pub
-    length: Arc<AtomicUsize>,
-}
-
-impl<T: Sized + Clone> VecObject<T> {
-    pub fn new() -> VecObject<T> {
-        VecObject {
-            inner: HAMT::new(),
-            length: Arc::new(AtomicUsize::new(0)),
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.length.load(Ordering::Relaxed)
-    }
-
-    pub fn new_from(mut input: Vec<T>) -> VecObject<T> {
-        let vec = VecObject::new();
-        let len = input.len();
-        for i in 0..len {
-            vec.inner.insert(i, input.remove(0));
-        }
-        vec.length.store(len, Ordering::Relaxed);
-        vec
-    }
-
-    pub fn get<F: Fn(&T) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
-        self.inner.search(&key, callback)
-    }
-
-    pub fn push(&self, item: T) {
-        let pos = self.length.fetch_add(1, Ordering::Relaxed);
-        self.inner.insert(pos, item);
-    }
-
-    pub fn pop(&self) {
-        if self.length.load(Ordering::Relaxed) > 0 {
-            let new_len = self.length.fetch_sub(1, Ordering::Relaxed) - 1;
-            self.inner.remove(new_len);
-        }
-    }
-}
-
 pub enum Mem {
-    VecMem(VecObject<Expr>),
+    VecMem(OVec<Expr>),
     FuncMem(FuncInner),
     SpecialMem(Box<SpecialFn>),
     ScopeMem(Scope),
@@ -83,14 +37,14 @@ impl fmt::Debug for Mem {
 }
 
 impl Mem {
-    pub fn as_vec(&self) -> &VecObject<Expr> {
+    pub fn as_vec(&self) -> &OVec<Expr> {
         match self {
             &Mem::VecMem(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
-    pub fn as_vec_mut(&mut self) -> &mut VecObject<Expr> {
+    pub fn as_vec_mut(&mut self) -> &mut OVec<Expr> {
         match self {
             &mut Mem::VecMem(ref mut inner) => inner,
             _ => unimplemented!(),
@@ -171,7 +125,7 @@ impl Expr {
         }
     }
 
-    pub fn as_vec<'a>(&'a self) -> &'a VecObject<Expr> {
+    pub fn as_vec<'a>(&'a self) -> &'a OVec<Expr> {
         match self {
             &Expr::Vec(ref alloc) => {
                 alloc.get().as_vec()
@@ -180,7 +134,7 @@ impl Expr {
         }
     }
 
-    //pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, VecObject<Expr>> {
+    //pub fn as_vec_mut<'a>(&'a mut self) -> RefMut<'a, OVec<Expr>> {
     //    match self {
     //        &mut Expr::Vec(ref mut alloc) => {
     //            x.as_vec_mut()
@@ -224,7 +178,7 @@ impl Expr {
 
 #[derive(Clone)]
 pub struct ContextState {
-    pub roots: VecObject<Gc>,
+    pub roots: OVec<Gc>,
 }
 
 pub struct Context {
@@ -239,7 +193,7 @@ impl Context {
             callstack: vec![],
             alloc: Arc::new(RwLock::new(GcArena::new())),
             state: ContextState {
-                roots: VecObject::new(),
+                roots: OVec::new(),
             }
         }
     }
@@ -264,14 +218,14 @@ pub fn funcfn_id(closure: &Gc) -> FuncFnId {
 
 pub struct Scope {
     pub parent: Option<Gc>,
-    pub scope: HAMT<Expr, Expr>,
+    pub scope: OMap<Expr, Expr>,
 }
 
 impl Scope {
     pub fn new(ctx: &mut Context, parent: Option<Gc>) -> Gc {
         ctx.allocate(Mem::ScopeMem(Scope {
             parent: parent,
-            scope: HAMT::new(),
+            scope: OMap::new(),
         }))
     }
 
