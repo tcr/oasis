@@ -1,10 +1,10 @@
 pub mod types;
 
 use alloc::Allocator;
-use scope::Mem;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use uuid::Uuid;
+use values::Mem;
 
 #[derive(Clone, Debug)]
 pub struct Ac {
