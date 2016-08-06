@@ -82,47 +82,47 @@ impl<T> GcState<T> {
     }
 }
 
-pub struct Gc {
+pub struct Ac {
     ptr: *const GcState<Mem>,
 }
 
-impl Gc {
-    pub fn new(ptr: *const GcState<Mem>) -> Gc {
-        Gc {
+impl Ac {
+    pub fn new(ptr: *const GcState<Mem>) -> Ac {
+        Ac {
             ptr: ptr
         }
     }
 }
 
-impl PartialEq for Gc {
+impl PartialEq for Ac {
     fn eq(&self, other: &Self) -> bool {
         self.ptr == other.ptr
     }
 }
 
-impl Eq for Gc { }
+impl Eq for Ac { }
 
-impl fmt::Debug for Gc {
+impl fmt::Debug for Ac {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Gc({:p})", self.ptr)
+        write!(f, "Ac({:p})", self.ptr)
     }
 }
 
-impl Hash for Gc {
+impl Hash for Ac {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.ptr.hash(state);
     }
 }
 
-impl Clone for Gc {
-    fn clone(&self) -> Gc {
-        Gc {
+impl Clone for Ac {
+    fn clone(&self) -> Ac {
+        Ac {
             ptr: self.ptr,
         }
     }
 }
 
-impl Deref for Gc {
+impl Deref for Ac {
     type Target = GcState<Mem>;
 
     fn deref(&self) -> &Self::Target {
@@ -141,11 +141,11 @@ unsafe impl Sync for GcArena { }
 
 impl Allocator for GcArena {
     type RefType = Mem;
-    type RefOut = Gc;
+    type RefOut = Ac;
 
-    fn pin(&mut self, item: Mem) -> Gc {
+    fn pin(&mut self, item: Mem) -> Ac {
         self.arena.push(Box::into_raw(Box::new(GcState::new(item))) as *mut _);
-        Gc::new(*self.arena.last().unwrap())
+        Ac::new(*self.arena.last().unwrap())
     }
 }
 
@@ -207,7 +207,7 @@ impl GcArena {
         }
     }
 
-    pub fn mark(value: &Gc) {
+    pub fn mark(value: &Ac) {
         if value.freed() {
             panic!("Attempted to mark freed object: {:?}", value.get());
         }

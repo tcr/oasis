@@ -5,28 +5,28 @@ use std::rc::Rc;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
-pub struct AllocOut {
+pub struct Ac {
     inner: Rc<Mem>,
     priv_id: String,
 }
 
-impl Hash for AllocOut {
+impl Hash for Ac {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.priv_id.hash(state);
     }
 }
 
-impl PartialEq for AllocOut {
+impl PartialEq for Ac {
     fn eq(&self, other: &Self) -> bool {
         self.priv_id == other.priv_id
     }
 }
 
-impl Eq for AllocOut { }
+impl Eq for Ac { }
 
-impl AllocOut {
-    pub fn new(item: Mem) -> AllocOut {
-        AllocOut {
+impl Ac {
+    pub fn new(item: Mem) -> Ac {
+        Ac {
             inner: Rc::new(item),
             priv_id: Uuid::new_v4().hyphenated().to_string(),
         }
@@ -41,19 +41,19 @@ impl AllocOut {
     }
 }
 
-pub struct RcArena;
+pub struct AcArena;
 
-impl RcArena {
-    pub fn new() -> RcArena {
-        RcArena
+impl AcArena {
+    pub fn new() -> AcArena {
+        AcArena
     }
 }
 
-impl Allocator for RcArena {
+impl Allocator for AcArena {
     type RefType = Mem;
-    type RefOut = AllocOut;
+    type RefOut = Ac;
 
-    fn pin(&mut self, item: Mem) -> AllocOut {
-        AllocOut::new(item)
+    fn pin(&mut self, item: Mem) -> Ac {
+        Ac::new(item)
     }
 }

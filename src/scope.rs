@@ -5,21 +5,21 @@ use types::{OVec, OMap};
 use std::fmt;
 use std::cell::RefCell;
 use std::sync::{Arc, RwLock};
-use rc_arena::{RcArena, AllocOut};
+use ac::{Ac, AcArena};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FuncFnId(pub String);
 
 pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
-pub type SpecialFn = Fn(&mut Context, AllocOut, Vec<Expr>) -> Expr;
+pub type SpecialFn = Fn(&mut Context, Ac, Vec<Expr>) -> Expr;
 
-pub fn funcfn_id(closure: &AllocOut) -> FuncFnId {
+pub fn funcfn_id(closure: &Ac) -> FuncFnId {
     FuncFnId(closure.id())
 }
 
 pub struct FuncInner {
     pub body: Box<FuncFn>,
-    pub scope: AllocOut,
+    pub scope: Ac,
 }
 
 pub enum Mem {
@@ -78,7 +78,7 @@ impl Mem {
         }
     }
 
-    pub fn wrap_fn(target: Box<FuncFn>, scope: AllocOut) -> Mem {
+    pub fn wrap_fn(target: Box<FuncFn>, scope: Ac) -> Mem {
         Mem::FuncMem(FuncInner {
             body: target,
             scope: scope,
@@ -100,9 +100,9 @@ pub enum Expr {
     List(Vec<Expr>),
 
     // Allocations
-    Vec(AllocOut),
-    Func(AllocOut),
-    Special(AllocOut),
+    Vec(Ac),
+    Func(Ac),
+    Special(Ac),
 }
 
 impl Expr {
@@ -162,7 +162,7 @@ impl Expr {
         }
     }
 
-    pub fn get_mem(&self) -> Option<&AllocOut> {
+    pub fn get_mem(&self) -> Option<&Ac> {
         match self {
             &Expr::Vec(ref inner) => Some(inner),
             &Expr::Func(ref inner) => Some(inner),
@@ -174,12 +174,12 @@ impl Expr {
 
 #[derive(Clone)]
 pub struct ContextState {
-    pub roots: OVec<AllocOut>,
+    pub roots: OVec<Ac>,
 }
 
 pub struct Context {
     pub callstack: Vec<(FuncFnId, bool)>,
-    pub alloc: Arc<RwLock<RcArena>>,
+    pub alloc: Arc<RwLock<AcArena>>,
     pub state: ContextState,
 }
 
@@ -187,7 +187,7 @@ impl Context {
     pub fn new() -> Context {
         Context {
             callstack: vec![],
-            alloc: Arc::new(RwLock::new(RcArena::new())),
+            alloc: Arc::new(RwLock::new(AcArena::new())),
             state: ContextState {
                 roots: OVec::new(),
             }
@@ -203,18 +203,18 @@ impl Context {
     //    }
     //}
 
-    pub fn allocate(&self, value: Mem) -> AllocOut {
+    pub fn allocate(&self, value: Mem) -> Ac {
         self.alloc.write().unwrap().pin(value)
     }
 }
 
 pub struct Scope {
-    pub parent: Option<AllocOut>,
+    pub parent: Option<Ac>,
     pub scope: RefCell<OMap<Expr, Expr>>,
 }
 
 impl Scope {
-    pub fn new(ctx: &mut Context, parent: Option<AllocOut>) -> AllocOut {
+    pub fn new(ctx: &mut Context, parent: Option<Ac>) -> Ac {
         ctx.allocate(Mem::ScopeMem(Scope {
             parent: parent,
             scope: RefCell::new(OMap::new()),
@@ -247,10 +247,10 @@ impl Scope {
     }
 }
 
-pub fn eval_expr(ctx: &mut Context, scope: AllocOut, x: Expr, args: Vec<Expr>) -> Expr {
+pub fn eval_expr(ctx: &mut Context, scope: Ac, x: Expr, args: Vec<Expr>) -> Expr {
     match x {
         Expr::Atom(..) => {
-            let (func, special): (Option<AllocOut>, Option<AllocOut>) = scope.get()
+            let (func, special): (Option<Ac>, Option<Ac>) = scope.get()
                 .as_scope()
                 .lookup(&x, |value| {
                     match value {
@@ -306,7 +306,7 @@ pub fn eval_expr(ctx: &mut Context, scope: AllocOut, x: Expr, args: Vec<Expr>) -
     }
 }
 
-pub fn eval(ctx: &mut Context, scope: AllocOut, expr: Expr) -> Expr {
+pub fn eval(ctx: &mut Context, scope: Ac, expr: Expr) -> Expr {
     match expr {
         Expr::List(args) => {
             let mut args = args.clone();

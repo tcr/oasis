@@ -14,7 +14,9 @@ pub mod cvec;
 pub mod lisp;
 pub mod scope;
 pub mod types;
-pub mod rc_arena;
+pub mod rc;
+
+pub use rc as ac;
 
 //use gc::*;
 use rand::Rng;
@@ -26,16 +28,16 @@ use std::io::{self, Read};
 use std::mem;
 use strfmt::strfmt;
 use types::OVec;
-use rc_arena::{AllocOut};
+use ac::Ac;
 
-fn special_def(ctx: &mut Context, scope: AllocOut, mut args: Vec<Expr>) -> Expr {
+fn special_def(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = eval(ctx, scope.clone(), args.remove(0));
     scope.get().as_scope().set(key, value);
     Expr::Null
 }
 
-fn special_defn(ctx: &mut Context, scope: AllocOut, mut args: Vec<Expr>) -> Expr {
+fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     use std::rc::Rc;
     use std::sync::RwLock;
 
@@ -53,7 +55,7 @@ fn special_defn(ctx: &mut Context, scope: AllocOut, mut args: Vec<Expr>) -> Expr
     //let debug_key = key.clone();
 
     let content = args; // TODO ensure purity
-    let closure: AllocOut = ctx.allocate(Mem::FuncMem(FuncInner {
+    let closure: Ac = ctx.allocate(Mem::FuncMem(FuncInner {
         scope: scope.clone(),
         body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
             //println!("called fn (key {:?})", debug_key);
@@ -161,7 +163,7 @@ fn special_defn(ctx: &mut Context, scope: AllocOut, mut args: Vec<Expr>) -> Expr
     Expr::Null
 }
 
-fn special_if(ctx: &mut Context, scope: AllocOut, mut args: Vec<Expr>) -> Expr {
+fn special_if(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let if_val = args.remove(0);
     let then_val = args.remove(0);
     let else_val = args.remove(0);
@@ -173,7 +175,7 @@ fn special_if(ctx: &mut Context, scope: AllocOut, mut args: Vec<Expr>) -> Expr {
     }
 }
 
-fn special_let(ctx: &mut Context, scope: AllocOut, mut args: Vec<Expr>) -> Expr {
+fn special_let(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let bindings = if let Expr::List(content) = args.remove(0) {
         content
     } else {
