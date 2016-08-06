@@ -8,13 +8,9 @@ extern crate uuid;
 
 pub mod alloc;
 pub mod ast;
-pub mod cvec;
-//pub mod gc;
-//pub mod gc_collector;
 pub mod lisp;
-pub mod scope;
-pub mod types;
 pub mod rc;
+pub mod scope;
 
 pub use rc as ac;
 
@@ -27,8 +23,8 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::mem;
 use strfmt::strfmt;
-use types::OVec;
 use ac::Ac;
+use ac::types::OVec;
 
 fn special_def(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);

@@ -1,3 +1,5 @@
+pub mod types;
+
 use alloc::Allocator;
 use scope::Mem;
 use std::hash::{Hash, Hasher};

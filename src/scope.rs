@@ -1,11 +1,10 @@
+use ac::{Ac, AcArena};
+use ac::types::{OVec, OMap};
 use alloc::*;
 use ast::*;
-//use gc::*;
-use types::{OVec, OMap};
-use std::fmt;
 use std::cell::RefCell;
+use std::fmt;
 use std::sync::{Arc, RwLock};
-use ac::{Ac, AcArena};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct FuncFnId(pub String);
