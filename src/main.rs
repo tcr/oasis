@@ -4,6 +4,7 @@
 extern crate ctrie;
 extern crate rand;
 extern crate strfmt;
+extern crate uuid;
 
 pub mod alloc;
 pub mod ast;

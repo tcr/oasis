@@ -2,21 +2,23 @@ use alloc::Allocator;
 use scope::Mem;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct AllocOut {
     inner: Rc<Mem>,
+    priv_id: String,
 }
 
 impl Hash for AllocOut {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        ((self as *const AllocOut) as usize).hash(state);
+        self.priv_id.hash(state);
     }
 }
 
 impl PartialEq for AllocOut {
     fn eq(&self, other: &Self) -> bool {
-        (self as *const AllocOut) == (other as *const AllocOut)
+        self.priv_id == other.priv_id
     }
 }
 
@@ -26,6 +28,7 @@ impl AllocOut {
     pub fn new(item: Mem) -> AllocOut {
         AllocOut {
             inner: Rc::new(item),
+            priv_id: Uuid::new_v4().hyphenated().to_string(),
         }
     }
 
@@ -34,7 +37,7 @@ impl AllocOut {
     }
 
     pub fn id(&self) -> String {
-        format!("{:p}", self)
+        self.priv_id.clone()
     }
 }
 
