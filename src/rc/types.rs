@@ -16,12 +16,16 @@ impl<T> OVec<T> {
         self.inner.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     pub fn new_from(input: Vec<T>) -> OVec<T> {
         OVec { inner: input }
     }
 
     pub fn get<F: Fn(&T) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
-        self.inner.get(key).map(|value| callback(&value))
+        self.inner.get(key).map(|value| callback(value))
     }
 
     pub fn push(&mut self, item: T) {
@@ -49,7 +53,7 @@ impl<K: hash::Hash + cmp::Eq + Clone, V: Clone> OMap<K, V> {
     /// Guaranteed to find any value existent in the hamt before and during
     /// the function call.
     pub fn search<'a, R, F: Fn(&V) -> R + 'a>(&self, key: &K, callback: F) -> Option<R> {
-        self.inner.get(key).map(|value| callback(&value))
+        self.inner.get(key).map(|value| callback(value))
     }
 
     /// Guaranteed to find any value existent in the hamt before and during

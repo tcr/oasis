@@ -1,25 +1,13 @@
 use ac::{Ac, AcArena};
 use ac::types::OMap;
-use alloc::*;
 use std::cell::RefCell;
 use values::*;
 
-pub struct Context {
-    pub callstack: Vec<(FuncFnId, bool)>,
-    pub alloc: AcArena,
-}
+pub trait Allocator {
+    type RefType;
+    type RefOut;
 
-impl Context {
-    pub fn new() -> Context {
-        Context {
-            callstack: vec![],
-            alloc: AcArena::new(),
-        }
-    }
-
-    pub fn allocate(&mut self, value: Mem) -> Ac {
-        self.alloc.pin(value)
-    }
+    fn pin(&mut self, Self::RefType) -> Self::RefOut;
 }
 
 pub struct Scope {
@@ -29,7 +17,7 @@ pub struct Scope {
 
 impl Scope {
     pub fn new(ctx: &mut Context, parent: Option<Ac>) -> Ac {
-        ctx.allocate(Mem::ScopeMem(Scope {
+        ctx.allocate(Mem::Scope(Scope {
             parent: parent,
             scope: RefCell::new(OMap::new()),
         }))
@@ -57,81 +45,91 @@ impl Scope {
     }
 }
 
-pub fn eval_expr(ctx: &mut Context, scope: Ac, x: Expr, args: Vec<Expr>) -> Expr {
-    match x {
-        Expr::Atom(..) => {
-            let (func, special): (Option<Ac>, Option<Ac>) = scope.get()
-                .as_scope()
-                .lookup(&x, |value| {
-                    match value {
-                        Some(&Expr::Func(ref func)) => (Some(func.clone()), None),
-                        Some(&Expr::Special(ref func)) => (None, Some(func.clone())),
-                        Some(ref value) => {
-                            panic!("Called uncallable value: {:?}", value);
-                        }
-                        _ => {
-                            panic!("Called value that doesn't exist");
-                        }
-                    }
-                })
-                .expect(&format!("Could not eval unknown atom {:?}", x));
-
-            // TODO delete attachment to root?
-            // ctx.state.roots.push(scope.clone());
-            // scope.set_completed(true)
-
-            ctx.callstack.push((FuncFnId("0x0".to_owned()), false));
-            let args: Vec<Expr> = args.into_iter()
-                .map(|x| if func.is_some() {
-                    eval(ctx, scope.clone(), x)
-                } else {
-                    x
-                })
-                .collect();
-            ctx.callstack.pop();
-
-            let ret = if let Some(func) = func {
-                let call = func.get();
-                let call = call.as_func();
-                let call = &call.body;
-                call(ctx, args)
-            } else if let Some(special) = special {
-                let call = special.get();
-                let call = call.as_special();
-                call(ctx, scope, args)
-            } else {
-                Expr::Null
-            };
-
-            // ctx.state.roots.pop();
-            ret
-        }
-        _ => {
-            panic!("Attempted to evaluate non-atom: {:?}", x);
-        }
-    }
+pub struct Context {
+    pub callstack: Vec<(FuncFnId, bool)>,
+    pub alloc: AcArena,
 }
 
-pub fn eval(ctx: &mut Context, scope: Ac, expr: Expr) -> Expr {
-    match expr {
-        Expr::List(args) => {
-            let mut args = args.clone();
-            let term = args.remove(0);
-            eval_expr(ctx, scope, term, args)
+impl Context {
+    pub fn new() -> Context {
+        Context {
+            callstack: vec![],
+            alloc: AcArena::new(),
         }
-        Expr::Atom(..) => {
-            // println!("why is scope scope {:?}", scope);
-            scope.get()
-                .as_scope()
-                .lookup(&expr, |x| {
-                    if let Some(inner) = x {
-                        inner.clone()
+    }
+
+    pub fn allocate(&mut self, value: Mem) -> Ac {
+        self.alloc.pin(value)
+    }
+
+    pub fn eval_expr(&mut self, scope: Ac, x: Expr, args: Vec<Expr>) -> Expr {
+        match x {
+            Expr::Atom(..) => {
+                let (func, special): (Option<Ac>, Option<Ac>) = scope.get()
+                    .as_scope()
+                    .lookup(&x, |value| {
+                        match value {
+                            Some(&Expr::Func(ref func)) => (Some(func.clone()), None),
+                            Some(&Expr::Special(ref func)) => (None, Some(func.clone())),
+                            Some(ref value) => {
+                                panic!("Called uncallable value: {:?}", value);
+                            }
+                            _ => {
+                                panic!("Called value that doesn't exist");
+                            }
+                        }
+                    })
+                    .expect(&format!("Could not eval unknown atom {:?}", x));
+
+                self.callstack.push((FuncFnId("0x0".to_owned()), false));
+                let args: Vec<Expr> = args.into_iter()
+                    .map(|x| if func.is_some() {
+                        self.eval(scope.clone(), x)
                     } else {
-                        unreachable!("Cannot evaluate value {:?}", expr);
-                    }
-                })
-                .expect(&format!("Eval failed to find named value: {:?}", expr))
+                        x
+                    })
+                    .collect();
+                self.callstack.pop();
+
+                if let Some(func) = func {
+                    let call = func.get();
+                    let call = call.as_func();
+                    let call = &call.body;
+                    call(self, args)
+                } else if let Some(special) = special {
+                    let call = special.get();
+                    let call = call.as_special();
+                    call(self, scope, args)
+                } else {
+                    Expr::Null
+                }
+            }
+            _ => {
+                panic!("Attempted to evaluate non-atom: {:?}", x);
+            }
         }
-        _ => expr,
+    }
+
+    pub fn eval(&mut self, scope: Ac, expr: Expr) -> Expr {
+        match expr {
+            Expr::List(args) => {
+                let mut args = args.clone();
+                let term = args.remove(0);
+                self.eval_expr(scope, term, args)
+            }
+            Expr::Atom(..) => {
+                scope.get()
+                    .as_scope()
+                    .lookup(&expr, |x| {
+                        if let Some(inner) = x {
+                            inner.clone()
+                        } else {
+                            unreachable!("Cannot evaluate value {:?}", expr);
+                        }
+                    })
+                    .expect(&format!("Eval failed to find named value: {:?}", expr))
+            }
+            _ => expr,
+        }
     }
 }

@@ -20,20 +20,20 @@ pub struct FuncInner {
 }
 
 pub enum Mem {
-    VecMem(OVec<Expr>),
-    FuncMem(FuncInner),
-    SpecialMem(Box<SpecialFn>),
-    ScopeMem(Scope),
+    Vec(OVec<Expr>),
+    Func(FuncInner),
+    Special(Box<SpecialFn>),
+    Scope(Scope),
     Deallocated,
 }
 
 impl fmt::Debug for Mem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Mem::VecMem(..) => write!(f, "VecMem({:p})", self),
-            &Mem::FuncMem(..) => write!(f, "FuncMem({:p})", self),
-            &Mem::SpecialMem(..) => write!(f, "SpecialMem({:p})", self),
-            &Mem::ScopeMem(..) => write!(f, "ScopeMem({:p})", self),
+            &Mem::Vec(..) => write!(f, "Mem::Vec({:p})", self),
+            &Mem::Func(..) => write!(f, "Mem::Func({:p})", self),
+            &Mem::Special(..) => write!(f, "Mem::Special({:p})", self),
+            &Mem::Scope(..) => write!(f, "Mem::Scope({:p})", self),
             &Mem::Deallocated => write!(f, "**DEALLOCATED**({:p})", self),
         }
     }
@@ -42,48 +42,48 @@ impl fmt::Debug for Mem {
 impl Mem {
     pub fn as_vec(&self) -> &OVec<Expr> {
         match self {
-            &Mem::VecMem(ref inner) => inner,
+            &Mem::Vec(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
     pub fn as_vec_mut(&mut self) -> &mut OVec<Expr> {
         match self {
-            &mut Mem::VecMem(ref mut inner) => inner,
+            &mut Mem::Vec(ref mut inner) => inner,
             _ => unimplemented!(),
         }
     }
 
     pub fn as_func(&self) -> &FuncInner {
         match self {
-            &Mem::FuncMem(ref inner) => inner,
+            &Mem::Func(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
     pub fn as_special(&self) -> &Box<SpecialFn> {
         match self {
-            &Mem::SpecialMem(ref inner) => inner,
+            &Mem::Special(ref inner) => inner,
             _ => unimplemented!(),
         }
     }
 
     pub fn as_scope(&self) -> &Scope {
         match self {
-            &Mem::ScopeMem(ref inner) => inner,
+            &Mem::Scope(ref inner) => inner,
             _ => panic!("Cannot dereference {:?}", self),
         }
     }
 
     pub fn wrap_fn(target: Box<FuncFn>, scope: Ac) -> Mem {
-        Mem::FuncMem(FuncInner {
+        Mem::Func(FuncInner {
             body: target,
             scope: scope,
         })
     }
 
     pub fn wrap_special(target: Box<SpecialFn>) -> Mem {
-        Mem::SpecialMem(target)
+        Mem::Special(target)
     }
 }
 

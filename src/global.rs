@@ -9,7 +9,7 @@ use values::*;
 
 fn special_def(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
-    let value = eval(ctx, scope.clone(), args.remove(0));
+    let value = ctx.eval(scope.clone(), args.remove(0));
     scope.get().as_scope().set(key, value);
     Expr::Null
 }
@@ -29,14 +29,10 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let inner_ref: Rc<RwLock<Option<FuncFnId>>> = Rc::new(RwLock::new(None));
     let outer_ref = inner_ref.clone();
 
-    // let debug_key = key.clone();
-
-    let content = args; // TODO ensure purity
-    let closure: Ac = ctx.allocate(Mem::FuncMem(FuncInner {
+    let content = args;
+    let closure: Ac = ctx.allocate(Mem::Func(FuncInner {
         scope: scope.clone(),
         body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
-            //println!("called fn (key {:?})", debug_key);
-
             // Check for TCO.
             let fn_ptr = inner_ref.read().unwrap();
             let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
@@ -50,18 +46,10 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
 
             if ctx.callstack.iter().rev()
                 .take_while(|x| x.1)
-                .position(|x| x.0 == fn_id).is_some() {
+                .any(|x| x.0 == fn_id) {
                 // Return early with evaluated arguments.
                 return Expr::TailCall(fn_id, args);
             }
-
-            // Temporarily pin all arguments
-            // TODO make this temporary
-            //for item in &args {
-            //    if let Some(alloc) = item.get_mem() {
-            //        ctx.roots.push(alloc.clone());
-            //    }
-            //}
 
             // Otherwise, add to call stack and evaluate.
             let pos = ctx.callstack.len();
@@ -79,10 +67,6 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
                     s2.get().as_scope().set((*item).clone(), value.clone());
                 }
 
-                // Hold on for dear life. GC
-                // TODO better to attach to current scope or something?
-                //s2.borrow_mut().as_scope().set_atom("__scope", Expr::Vec(alloc!(ctx, Mem::VecMem(OVec::new_from(content.clone())))));
-
                 let len = content.len();
                 for (i, statement) in content.iter().enumerate() {
                     // When we are evaluating the last statement, change our Context
@@ -90,19 +74,8 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
                     if i + 1 == len {
                         ctx.callstack[pos].1 = true;
                     }
-
-                    //s2.borrow_mut().as_scope().lookup(&Expr::Atom("inner".to_owned()), |x| {
-                    //    println!("inner: {:?}", x);
-                    //});
-                    //println!("scope: {:?}", s2.clone());
-                    res = eval(ctx, s2.clone(), statement.clone());
-                    //s2.borrow_mut().as_scope().lookup(&Expr::Atom("inner".to_owned()), |x| {
-                    //    println!("inner2: {:?}", x);
-                    //});
+                    res = ctx.eval(s2.clone(), statement.clone());
                 }
-
-                //GC_DETACH
-                //ctx.state.roots.pop();
 
                 // Evaluate tail call expressions if they match this function.
                 if match res {
@@ -112,14 +85,6 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
                     _ => false,
                 } {
                     if let Expr::TailCall(_, inner_args) = mem::replace(&mut res, Expr::Null) {
-                        // Temporarily pin all arguments
-                        // TODO make this temporary
-                        //for item in &inner_args {
-                        //    if let Some(alloc) = item.get_mem() {
-                        //        ctx.roots.push(alloc.clone());
-                        //    }
-                        //}
-
                         args = inner_args;
                         continue;
                     }
@@ -145,10 +110,10 @@ fn special_if(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let then_val = args.remove(0);
     let else_val = args.remove(0);
 
-    if eval(ctx, scope.clone(), if_val).as_bool() {
-        eval(ctx, scope.clone(), then_val)
+    if ctx.eval(scope.clone(), if_val).as_bool() {
+        ctx.eval(scope.clone(), then_val)
     } else {
-        eval(ctx, scope.clone(), else_val)
+        ctx.eval(scope.clone(), else_val)
     }
 }
 
@@ -164,13 +129,13 @@ fn special_let(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     for win in bindings[..].chunks(2) {
         let item = win[0].clone();
         let value = win[1].clone();
-        let value = eval(ctx, s2.clone(), value);
+        let value = ctx.eval(s2.clone(), value);
         s2.get().as_scope().set(item, value);
     }
 
     let mut res = Expr::Null;
-    for statement in content.iter() {
-        res = eval(ctx, s2.clone(), statement.clone());
+    for statement in &content {
+        res = ctx.eval(s2.clone(), statement.clone());
     }
 
     res
@@ -183,7 +148,7 @@ fn eval_add(_: &mut Context, args: Vec<Expr>) -> Expr {
 }
 
 fn eval_sub(_: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::Int(match (&args[0], args.iter().nth(1)) {
+    Expr::Int(match (&args[0], args.get(1)) {
         (&Expr::Int(a), Some(&Expr::Int(b))) => a - b,
         (&Expr::Int(a), None) => -a,
         _ => 0,
@@ -234,7 +199,7 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
-    Expr::Vec(ctx.allocate(Mem::VecMem(OVec::new_from(args))))
+    Expr::Vec(ctx.allocate(Mem::Vec(OVec::new_from(args))))
 }
 
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -256,7 +221,7 @@ fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
-    Expr::Vec(ctx.allocate(Mem::VecMem(OVec::new_from(args))))
+    Expr::Vec(ctx.allocate(Mem::Vec(OVec::new_from(args))))
 }
 
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {
@@ -293,7 +258,7 @@ fn eval_len(_: &mut Context, mut args: Vec<Expr>) -> Expr {
 }
 
 fn wrap_special(ctx: &mut Context, item: Box<SpecialFn>) -> Expr {
-    Expr::Special(ctx.allocate(Mem::SpecialMem(item)))
+    Expr::Special(ctx.allocate(Mem::Special(item)))
 }
 
 fn wrap_fn(ctx: &mut Context, item: Box<FuncFn>, scope: &Ac) -> Expr {

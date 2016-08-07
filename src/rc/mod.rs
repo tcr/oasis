@@ -1,6 +1,6 @@
 pub mod types;
 
-use alloc::Allocator;
+use scope::Allocator;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use uuid::Uuid;
@@ -34,7 +34,7 @@ impl Ac {
         }
     }
 
-    pub fn get<'a>(&'a self) -> &'a Mem {
+    pub fn get(&self) -> &Mem {
         &*self.inner
     }
 
