@@ -94,7 +94,7 @@ impl Context {
                 if let Some(func) = func {
                     let call = func.get();
                     let call = call.as_func();
-                    let call = &call.body;
+                    let call = call.0;
                     call(self, args)
                 } else if let Some(special) = special {
                     let call = special.get();

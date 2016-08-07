@@ -14,14 +14,9 @@ pub fn funcfn_id(closure: &Ac) -> FuncFnId {
     FuncFnId(closure.id())
 }
 
-pub struct FuncInner {
-    pub body: Box<FuncFn>,
-    pub scope: Ac,
-}
-
 pub enum Mem {
     Vec(OVec<Expr>),
-    Func(FuncInner),
+    Func(Box<FuncFn>, Ac),
     Special(Box<SpecialFn>),
     Scope(Scope),
     Deallocated,
@@ -54,9 +49,9 @@ impl Mem {
         }
     }
 
-    pub fn as_func(&self) -> &FuncInner {
+    pub fn as_func(&self) -> (&Box<FuncFn>, &Ac) {
         match self {
-            &Mem::Func(ref inner) => inner,
+            &Mem::Func(ref func, ref ac) => (func, ac),
             _ => unimplemented!(),
         }
     }
@@ -73,17 +68,6 @@ impl Mem {
             &Mem::Scope(ref inner) => inner,
             _ => panic!("Cannot dereference {:?}", self),
         }
-    }
-
-    pub fn wrap_fn(target: Box<FuncFn>, scope: Ac) -> Mem {
-        Mem::Func(FuncInner {
-            body: target,
-            scope: scope,
-        })
-    }
-
-    pub fn wrap_special(target: Box<SpecialFn>) -> Mem {
-        Mem::Special(target)
     }
 }
 

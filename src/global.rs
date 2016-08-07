@@ -30,9 +30,8 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let outer_ref = inner_ref.clone();
 
     let content = args;
-    let closure: Ac = ctx.allocate(Mem::Func(FuncInner {
-        scope: scope.clone(),
-        body: Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
+    let closure: Ac = ctx.allocate(Mem::Func(
+        Box::new(move |ctx: &mut Context, mut args: Vec<Expr>| {
             // Check for TCO.
             let fn_ptr = inner_ref.read().unwrap();
             let fn_id = fn_ptr.clone().expect("No FunFnId for this function.");
@@ -96,7 +95,8 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
             ctx.callstack.pop();
             res
         }),
-    }));
+        scope.clone(),
+    ));
 
     // Store unique closure ID.
     *outer_ref.write().unwrap() = Some(funcfn_id(&closure));
@@ -262,7 +262,7 @@ fn wrap_special(ctx: &mut Context, item: Box<SpecialFn>) -> Expr {
 }
 
 fn wrap_fn(ctx: &mut Context, item: Box<FuncFn>, scope: &Ac) -> Expr {
-    Expr::Func(ctx.allocate(Mem::wrap_fn(item, scope.clone())))
+    Expr::Func(ctx.allocate(Mem::Func(item, scope.clone())))
 }
 
 pub fn populate_global(ctx: &mut Context, scope: Ac) {
