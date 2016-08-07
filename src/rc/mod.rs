@@ -4,7 +4,7 @@ use scope::Allocator;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use uuid::Uuid;
-use values::Mem;
+use values::{Mem, AcId};
 
 #[derive(Clone, Debug)]
 pub struct Ac {
@@ -38,8 +38,8 @@ impl Ac {
         &*self.inner
     }
 
-    pub fn id(&self) -> String {
-        self.priv_id.clone()
+    pub fn id(&self) -> AcId {
+        AcId(self.priv_id.clone())
     }
 }
 

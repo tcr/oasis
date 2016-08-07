@@ -26,7 +26,7 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     };
 
     let parent_scope = scope.clone();
-    let inner_ref: Rc<RwLock<Option<FuncFnId>>> = Rc::new(RwLock::new(None));
+    let inner_ref: Rc<RwLock<Option<AcId>>> = Rc::new(RwLock::new(None));
     let outer_ref = inner_ref.clone();
 
     let content = args;
@@ -99,7 +99,7 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     ));
 
     // Store unique closure ID.
-    *outer_ref.write().unwrap() = Some(funcfn_id(&closure));
+    *outer_ref.write().unwrap() = Some(closure.id());
     scope.get().as_scope().set(key, Expr::Func(closure.clone()));
 
     Expr::Null

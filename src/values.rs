@@ -4,15 +4,11 @@ use ast::*;
 use std::fmt;
 use scope::*;
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct FuncFnId(pub String);
-
 pub type FuncFn = Fn(&mut Context, Vec<Expr>) -> Expr;
 pub type SpecialFn = Fn(&mut Context, Ac, Vec<Expr>) -> Expr;
 
-pub fn funcfn_id(closure: &Ac) -> FuncFnId {
-    FuncFnId(closure.id())
-}
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub struct AcId(pub String);
 
 pub enum Mem {
     Vec(OVec<Expr>),
@@ -77,7 +73,7 @@ pub enum Expr {
     Atom(String),
     Str(String),
     Null,
-    TailCall(FuncFnId, Vec<Expr>),
+    TailCall(AcId, Vec<Expr>),
     List(Vec<Expr>),
 
     // Allocations

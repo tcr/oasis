@@ -46,7 +46,7 @@ impl Scope {
 }
 
 pub struct Context {
-    pub callstack: Vec<(FuncFnId, bool)>,
+    pub callstack: Vec<(AcId, bool)>,
     pub alloc: AcArena,
 }
 
@@ -81,7 +81,7 @@ impl Context {
                     })
                     .expect(&format!("Could not eval unknown atom {:?}", x));
 
-                self.callstack.push((FuncFnId("0x0".to_owned()), false));
+                self.callstack.push((AcId("0x0".to_owned()), false));
                 let args: Vec<Expr> = args.into_iter()
                     .map(|x| if func.is_some() {
                         self.eval(scope.clone(), x)
