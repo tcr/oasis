@@ -9,9 +9,7 @@ pub struct OVec<T> {
 
 impl<T> OVec<T> {
     pub fn new() -> OVec<T> {
-        OVec {
-            inner: Vec::new(),
-        }
+        OVec { inner: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -19,15 +17,11 @@ impl<T> OVec<T> {
     }
 
     pub fn new_from(input: Vec<T>) -> OVec<T> {
-        OVec {
-            inner: input
-        }
+        OVec { inner: input }
     }
 
     pub fn get<F: Fn(&T) -> R, R>(&self, key: usize, callback: F) -> Option<R> {
-        self.inner.get(key).map(|value| {
-            callback(&value)
-        })
+        self.inner.get(key).map(|value| callback(&value))
     }
 
     pub fn push(&mut self, item: T) {
@@ -37,7 +31,6 @@ impl<T> OVec<T> {
     pub fn pop(&mut self) {
         self.inner.pop();
     }
-
 }
 
 pub struct OMap<K, V> {
@@ -46,9 +39,7 @@ pub struct OMap<K, V> {
 
 impl<K: hash::Hash + cmp::Eq + Clone, V: Clone> OMap<K, V> {
     pub fn new() -> OMap<K, V> {
-        OMap {
-            inner: HashMap::new(),
-        }
+        OMap { inner: HashMap::new() }
     }
 
     pub fn insert(&mut self, k: K, v: V) {
@@ -58,9 +49,7 @@ impl<K: hash::Hash + cmp::Eq + Clone, V: Clone> OMap<K, V> {
     /// Guaranteed to find any value existent in the hamt before and during
     /// the function call.
     pub fn search<'a, R, F: Fn(&V) -> R + 'a>(&self, key: &K, callback: F) -> Option<R> {
-        self.inner.get(key).map(|value| {
-            callback(&value)
-        })
+        self.inner.get(key).map(|value| callback(&value))
     }
 
     /// Guaranteed to find any value existent in the hamt before and during

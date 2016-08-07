@@ -108,9 +108,9 @@ impl Expr {
             &Ast::Int(value) => Expr::Int(value),
             &Ast::Atom(ref value) => Expr::Atom(value.clone()),
             &Ast::List(ref value) => {
-                Expr::List(value.iter().map(|x| {
-                    Expr::from_ast(ctx, x)
-                }).collect())
+                Expr::List(value.iter()
+                    .map(|x| Expr::from_ast(ctx, x))
+                    .collect())
             }
             &Ast::Str(ref value) => Expr::Str(value.clone()),
             &Ast::Null => Expr::Null,
@@ -121,18 +121,16 @@ impl Expr {
         Expr::Atom(key.to_owned())
     }
 
-    pub fn as_list<'a>(&'a self) -> &'a Vec<Expr> {
+    pub fn as_list(&self) -> &Vec<Expr> {
         match self {
             &Expr::List(ref inner) => inner,
             _ => unreachable!(),
         }
     }
 
-    pub fn as_vec<'a>(&'a self) -> &'a OVec<Expr> {
+    pub fn as_vec(&self) -> &OVec<Expr> {
         match self {
-            &Expr::Vec(ref alloc) => {
-                alloc.get().as_vec()
-            }
+            &Expr::Vec(ref alloc) => alloc.get().as_vec(),
             _ => panic!("Attempted to use {:?} as vec", self),
         }
     }
@@ -161,8 +159,8 @@ impl Expr {
 
     pub fn get_mem(&self) -> Option<&Ac> {
         match self {
-            &Expr::Vec(ref inner) => Some(inner),
-            &Expr::Func(ref inner) => Some(inner),
+            &Expr::Vec(ref inner) |
+            &Expr::Func(ref inner) |
             &Expr::Special(ref inner) => Some(inner),
             _ => None,
         }

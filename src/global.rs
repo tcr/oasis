@@ -29,7 +29,7 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let inner_ref: Rc<RwLock<Option<FuncFnId>>> = Rc::new(RwLock::new(None));
     let outer_ref = inner_ref.clone();
 
-    //let debug_key = key.clone();
+    // let debug_key = key.clone();
 
     let content = args; // TODO ensure purity
     let closure: Ac = ctx.allocate(Mem::FuncMem(FuncInner {
@@ -242,18 +242,16 @@ fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
 
     let value_vec = value.as_vec();
-    value_vec.get((key.as_int() as usize), |value| {
-        value.clone()
-    }).unwrap_or(Expr::Null)
+    value_vec.get((key.as_int() as usize), |value| value.clone())
+        .unwrap_or(Expr::Null)
 }
 
 fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
 
     let value_vec = value.as_vec();
-    value_vec.get(0, |value| {
-        value.clone()
-    }).unwrap_or(Expr::Null)
+    value_vec.get(0, |value| value.clone())
+        .unwrap_or(Expr::Null)
 }
 
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
@@ -294,28 +292,35 @@ fn eval_len(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     Expr::Int(vec.len() as i32)
 }
 
-pub fn populate_global(ctx: &mut Context, s: Ac) {
-    let s2 = s.clone();
-    let s = s.get().as_scope();
+fn wrap_special(ctx: &mut Context, item: Box<SpecialFn>) -> Expr {
+    Expr::Special(ctx.allocate(Mem::SpecialMem(item)))
+}
 
-    s.set_atom("def", Expr::Special(ctx.allocate(Mem::SpecialMem(Box::new(special_def)))));
-    s.set_atom("defn", Expr::Special(ctx.allocate(Mem::SpecialMem(Box::new(special_defn)))));
-    s.set_atom("if", Expr::Special(ctx.allocate(Mem::SpecialMem(Box::new(special_if)))));
-    s.set_atom("let", Expr::Special(ctx.allocate(Mem::SpecialMem(Box::new(special_let)))));
+fn wrap_fn(ctx: &mut Context, item: Box<FuncFn>, scope: &Ac) -> Expr {
+    Expr::Func(ctx.allocate(Mem::wrap_fn(item, scope.clone())))
+}
 
-    s.set_atom("+", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_add), s2.clone()))));
-    s.set_atom("-", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_sub), s2.clone()))));
-    s.set_atom("*", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_mul), s2.clone()))));
-    s.set_atom("/", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_div), s2.clone()))));
-    s.set_atom("<<", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_bitshiftleft), s2.clone()))));
-    s.set_atom("=", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_eq), s2.clone()))));
-    s.set_atom("<", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_le), s2.clone()))));
-    s.set_atom("vec", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_vec), s2.clone()))));
-    s.set_atom("index", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_index), s2.clone()))));
-    s.set_atom("first", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_first), s2.clone()))));
-    s.set_atom("rest", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_rest), s2.clone()))));
-    s.set_atom("null?", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_nullq), s2.clone()))));
-    s.set_atom("println", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_println), s2.clone()))));
-    s.set_atom("random", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_random), s2.clone()))));
-    s.set_atom("len", Expr::Func(ctx.allocate(Mem::wrap_fn(Box::new(eval_len), s2.clone()))));
+pub fn populate_global(ctx: &mut Context, scope: Ac) {
+    let s = scope.get().as_scope();
+
+    s.set_atom("def", wrap_special(ctx, Box::new(special_def)));
+    s.set_atom("defn", wrap_special(ctx, Box::new(special_defn)));
+    s.set_atom("if", wrap_special(ctx, Box::new(special_if)));
+    s.set_atom("let", wrap_special(ctx, Box::new(special_let)));
+
+    s.set_atom("+", wrap_fn(ctx, Box::new(eval_add), &scope));
+    s.set_atom("-", wrap_fn(ctx, Box::new(eval_sub), &scope));
+    s.set_atom("*", wrap_fn(ctx, Box::new(eval_mul), &scope));
+    s.set_atom("/", wrap_fn(ctx, Box::new(eval_div), &scope));
+    s.set_atom("<<", wrap_fn(ctx, Box::new(eval_bitshiftleft), &scope));
+    s.set_atom("=", wrap_fn(ctx, Box::new(eval_eq), &scope));
+    s.set_atom("<", wrap_fn(ctx, Box::new(eval_le), &scope));
+    s.set_atom("vec", wrap_fn(ctx, Box::new(eval_vec), &scope));
+    s.set_atom("index", wrap_fn(ctx, Box::new(eval_index), &scope));
+    s.set_atom("first", wrap_fn(ctx, Box::new(eval_first), &scope));
+    s.set_atom("rest", wrap_fn(ctx, Box::new(eval_rest), &scope));
+    s.set_atom("null?", wrap_fn(ctx, Box::new(eval_nullq), &scope));
+    s.set_atom("println", wrap_fn(ctx, Box::new(eval_println), &scope));
+    s.set_atom("random", wrap_fn(ctx, Box::new(eval_random), &scope));
+    s.set_atom("len", wrap_fn(ctx, Box::new(eval_len), &scope));
 }

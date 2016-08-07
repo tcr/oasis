@@ -46,15 +46,11 @@ impl Scope {
     pub fn lookup<F, T>(&self, key: &Expr, inner: F) -> Option<T>
         where F: Fn(Option<&Expr>) -> T
     {
-        if let Some(value) = self.scope.borrow().search(key, |value| {
-            inner(Some(value))
-        }) {
+        if let Some(value) = self.scope.borrow().search(key, |value| inner(Some(value))) {
             Some(value)
         } else {
             match self.parent {
-                Some(ref parent) => {
-                    parent.get().as_scope().lookup(key, inner)
-                }
+                Some(ref parent) => parent.get().as_scope().lookup(key, inner),
                 None => None,
             }
         }
@@ -68,12 +64,8 @@ pub fn eval_expr(ctx: &mut Context, scope: Ac, x: Expr, args: Vec<Expr>) -> Expr
                 .as_scope()
                 .lookup(&x, |value| {
                     match value {
-                        Some(&Expr::Func(ref func)) => {
-                            (Some(func.clone()), None)
-                        }
-                        Some(&Expr::Special(ref func)) => {
-                            (None, Some(func.clone()))
-                        }
+                        Some(&Expr::Func(ref func)) => (Some(func.clone()), None),
+                        Some(&Expr::Special(ref func)) => (None, Some(func.clone())),
                         Some(ref value) => {
                             panic!("Called uncallable value: {:?}", value);
                         }
@@ -85,8 +77,8 @@ pub fn eval_expr(ctx: &mut Context, scope: Ac, x: Expr, args: Vec<Expr>) -> Expr
                 .expect(&format!("Could not eval unknown atom {:?}", x));
 
             // TODO delete attachment to root?
-            //ctx.state.roots.push(scope.clone());
-            //scope.set_completed(true)
+            // ctx.state.roots.push(scope.clone());
+            // scope.set_completed(true)
 
             ctx.callstack.push((FuncFnId("0x0".to_owned()), false));
             let args: Vec<Expr> = args.into_iter()
@@ -111,7 +103,7 @@ pub fn eval_expr(ctx: &mut Context, scope: Ac, x: Expr, args: Vec<Expr>) -> Expr
                 Expr::Null
             };
 
-            //ctx.state.roots.pop();
+            // ctx.state.roots.pop();
             ret
         }
         _ => {
@@ -128,7 +120,7 @@ pub fn eval(ctx: &mut Context, scope: Ac, expr: Expr) -> Expr {
             eval_expr(ctx, scope, term, args)
         }
         Expr::Atom(..) => {
-            //println!("why is scope scope {:?}", scope);
+            // println!("why is scope scope {:?}", scope);
             scope.get()
                 .as_scope()
                 .lookup(&expr, |x| {

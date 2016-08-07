@@ -24,7 +24,7 @@ impl PartialEq for Ac {
     }
 }
 
-impl Eq for Ac { }
+impl Eq for Ac {}
 
 impl Ac {
     pub fn new(item: Mem) -> Ac {
