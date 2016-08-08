@@ -1,3 +1,12 @@
+//! This crate implements the OVec and OMap interfaces as simple wrappers around
+//! Rust's built-in Vec and HashMap types. These interfaces are subsets of the
+//! stdlib functionality, but allow us to present a generic interface that can
+//! be used by difference memory management strategies without being tied to
+//! a particular implementation. Thus we make no assumptions about the ability
+//! to return a reference to an object on the heap, so we can give more
+//! information to the allocator about when an object is no longer referenced
+//! and may be collected.
+
 use std::collections::HashMap;
 use std::cmp;
 use std::hash;

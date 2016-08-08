@@ -18,10 +18,12 @@ use std::fs::File;
 use std::io::{self, Read};
 use values::*;
 
+/// Program entry point.
 fn main() {
     run().expect("Runtime code failed with error.");
 }
 
+/// Program execution that is able to return a standard io::Result<..> object.
 fn run() -> io::Result<()> {
     // Read in first argument as file.
     let content_path = env::args().nth(1).unwrap();

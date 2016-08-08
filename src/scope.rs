@@ -3,12 +3,13 @@ use ac::types::OMap;
 use std::cell::RefCell;
 use values::*;
 
-pub trait Allocator {
-    type RefType;
-    type RefOut;
-
-    fn pin(&mut self, Self::RefType) -> Self::RefOut;
-}
+/// Object describing the scope of a single Oasis function. This contains a map
+/// associating keys in this scope with values.
+///
+/// Scopes contain a reference to their parents. This hierarchy formed by
+/// following the chain of parent objects allows us to implement lexical scope,
+/// i.e. inner functions being able to reference variables that were declared
+/// inside of an outer scope.
 
 pub struct Scope {
     pub parent: Option<Ac>,
@@ -16,6 +17,8 @@ pub struct Scope {
 }
 
 impl Scope {
+    /// Create a new scope object and allocate it within the context's
+    /// allocator.
     pub fn new(ctx: &mut Context, parent: Option<Ac>) -> Ac {
         ctx.allocate(Mem::Scope(Scope {
             parent: parent,
@@ -23,14 +26,20 @@ impl Scope {
         }))
     }
 
+    /// Set a key in this scope to the corresponding vale.
     pub fn set(&self, key: Expr, value: Expr) {
         self.scope.borrow_mut().insert(key, value.clone());
     }
 
+    /// Shorthand to set an atom in this scope to the corresponding vale.
     pub fn set_atom(&self, key: &str, value: Expr) {
         self.set(Expr::Atom(key.to_owned()), value)
     }
 
+    /// Look through this scope and all of its ancestor scopes to find a value
+    /// matching the given key. If a value by that key is found, we call the
+    /// callback function with the value; we either return a Some(value)
+    /// returned by this callback or None if the lookup failed.
     pub fn lookup<F, T>(&self, key: &Expr, inner: F) -> Option<T>
         where F: Fn(Option<&Expr>) -> T
     {
@@ -45,12 +54,22 @@ impl Scope {
     }
 }
 
+/// Execution context for Oasis that carries all state that should be shared
+/// between functions.
+///
+/// We do not need to track state that is not related to the invocation itself,
+/// like the scope we are currently executing in. This is handled by eval().
+///
+/// We use Context to track global state values like the memory allocator. In
+/// addition, we use it as a useful reference to the callstack we are evaluating
+/// in, which is required for tail-call optimization.
 pub struct Context {
     pub callstack: Vec<(AcId, bool)>,
-    pub alloc: AcArena,
+    alloc: AcArena,
 }
 
 impl Context {
+    /// Create a default context object.
     pub fn new() -> Context {
         Context {
             callstack: vec![],
@@ -58,10 +77,41 @@ impl Context {
         }
     }
 
+    /// Shortcut for allocating values using the global allocator.
     pub fn allocate(&mut self, value: Mem) -> Ac {
         self.alloc.pin(value)
     }
 
+    /// Evaluate an expression object. If we are passed in an s-expression, we
+    /// defer to eval_expr. If we are passed an atom, we look up its value and
+    /// return it.
+    pub fn eval(&mut self, scope: Ac, expr: Expr) -> Expr {
+        match expr {
+            Expr::List(args) => {
+                let mut args = args.clone();
+                let term = args.remove(0);
+                self.eval_expr(scope, term, args)
+            }
+            Expr::Atom(..) => {
+                scope.get()
+                    .as_scope()
+                    .lookup(&expr, |x| {
+                        if let Some(inner) = x {
+                            inner.clone()
+                        } else {
+                            unreachable!("Cannot evaluate value {:?}", expr);
+                        }
+                    })
+                    .expect(&format!("Eval failed to find named value: {:?}", expr))
+            }
+            _ => expr,
+        }
+    }
+
+    /// Directly evaluate an s-expression. First look up the atom in
+    /// the current scope, then evaluate our arguments in the current context,
+    /// or pass them along uninterpreted if we are evaluating a special form.
+    /// Returns the result of the expression.
     pub fn eval_expr(&mut self, scope: Ac, x: Expr, args: Vec<Expr>) -> Expr {
         match x {
             Expr::Atom(..) => {
@@ -107,29 +157,6 @@ impl Context {
             _ => {
                 panic!("Attempted to evaluate non-atom: {:?}", x);
             }
-        }
-    }
-
-    pub fn eval(&mut self, scope: Ac, expr: Expr) -> Expr {
-        match expr {
-            Expr::List(args) => {
-                let mut args = args.clone();
-                let term = args.remove(0);
-                self.eval_expr(scope, term, args)
-            }
-            Expr::Atom(..) => {
-                scope.get()
-                    .as_scope()
-                    .lookup(&expr, |x| {
-                        if let Some(inner) = x {
-                            inner.clone()
-                        } else {
-                            unreachable!("Cannot evaluate value {:?}", expr);
-                        }
-                    })
-                    .expect(&format!("Eval failed to find named value: {:?}", expr))
-            }
-            _ => expr,
         }
     }
 }

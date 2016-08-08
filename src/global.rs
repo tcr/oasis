@@ -7,6 +7,10 @@ use std::mem;
 use strfmt::strfmt;
 use values::*;
 
+/// (def *id* *value*)
+/// Implements the special form `def`. Assigns the identifier *id* in the
+/// current scope to *value*. This is able to be referenced by any subsequent
+/// expressions; see `let` for creating a new scope.
 fn special_def(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let key = args.remove(0);
     let value = ctx.eval(scope.clone(), args.remove(0));
@@ -14,6 +18,25 @@ fn special_def(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
+/// (def *id* (*arg-names...*) *expressions...*)
+/// Implements the special form `defn`. Assigns the identifier *id* in the
+/// current scope to a function that takes *arg-names* and executes
+/// *expressions*. This function enables user code to define its own functions.
+///
+/// Each function, when called, as an entry to the context's *call stack*. It
+/// then evaluates the inner expressions, before popping its entry off the call
+/// stack.
+///
+/// Crucially, `defn` implements logic for *tail-call optimization*. When a
+/// function is invoked in *tail position* (i.e. is the last expression to be
+/// invoked in a function), we check if the function being called already exists
+/// in the callstack and is marked as being the last expression being evaluated.
+/// If so, we return a special expression value `TailCall`. The most recent
+/// invocation of the function in the callstack checks if a `TailCall` value is
+/// returned, and if its function ID matches itself, it loops and repeats its
+/// invocation as though it were called with those arguments. This optimization
+/// allows us to recursively call a function without infinitely expanding the
+/// system's call stack, which has an upper limit.
 fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     use std::rc::Rc;
     use std::sync::RwLock;
@@ -105,6 +128,9 @@ fn special_defn(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
+/// (if *cond* *then* *else*)
+/// Implements the special form `if`. If the expression *cond* is *truthy*, then
+/// the *then* clause is evaluated. Otherwise, *else* is evaluated.
 fn special_if(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let if_val = args.remove(0);
     let then_val = args.remove(0);
@@ -117,6 +143,10 @@ fn special_if(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     }
 }
 
+/// (let (*bindings...) *expressions...*)
+/// Implements the special form `let`. Creates a scope in which the bindings
+/// (a list of subsequent *identifier* *value* pairs) are set and in which the
+/// *expressions* are evaluated.
 fn special_let(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     let bindings = if let Expr::List(content) = args.remove(0) {
         content
@@ -125,6 +155,7 @@ fn special_let(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     };
     let content = args;
 
+    // Extract alternating *key* *value* pairs and set them in the scope.
     let s2 = Scope::new(ctx, Some(scope.clone()));
     for win in bindings[..].chunks(2) {
         let item = win[0].clone();
@@ -141,12 +172,17 @@ fn special_let(ctx: &mut Context, scope: Ac, mut args: Vec<Expr>) -> Expr {
     res
 }
 
+/// (+ *left* *right*)
+/// Adds two numbers together. Each value is casted to a number during
+/// evaluation.
 fn eval_add(_: &mut Context, args: Vec<Expr>) -> Expr {
     Expr::Int(args.iter()
         .map(|x| x.as_int())
         .fold(0, |sum, val| sum + val))
 }
 
+/// (- *left* *right*)
+/// Subtracts two numbers. Each value is casted to a number during evaluation.
 fn eval_sub(_: &mut Context, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], args.get(1)) {
         (&Expr::Int(a), Some(&Expr::Int(b))) => a - b,
@@ -155,6 +191,8 @@ fn eval_sub(_: &mut Context, args: Vec<Expr>) -> Expr {
     })
 }
 
+/// (* *left* *right*)
+/// Multiplies two numbers. Each value is casted to a number during evaluation.
 fn eval_mul(_: &mut Context, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a * b,
@@ -162,6 +200,8 @@ fn eval_mul(_: &mut Context, args: Vec<Expr>) -> Expr {
     })
 }
 
+/// (/ *left* *right*)
+/// Divides two numbers. Each value is casted to a number during evaluation.
 fn eval_div(_: &mut Context, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a / b,
@@ -169,6 +209,9 @@ fn eval_div(_: &mut Context, args: Vec<Expr>) -> Expr {
     })
 }
 
+/// (<< *left* *right*)
+/// Bit shifts *left* by *right* bits. Each value is casted to a number during
+/// evaluation.
 fn eval_bitshiftleft(_: &mut Context, args: Vec<Expr>) -> Expr {
     Expr::Int(match (&args[0], &args[1]) {
         (&Expr::Int(a), &Expr::Int(b)) => a << b,
@@ -176,6 +219,9 @@ fn eval_bitshiftleft(_: &mut Context, args: Vec<Expr>) -> Expr {
     })
 }
 
+/// (== *left* *right*)
+/// Returns a boolean value representing whether *left* is an equivalent value
+/// to *right*.
 fn eval_eq(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let a = args.remove(0);
     let b = args.remove(0);
@@ -187,6 +233,9 @@ fn eval_eq(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     }
 }
 
+/// (< *left* *right*)
+/// Returns a boolean value representing whether *left* is a lesser value than
+/// *right*. Each value is casted to a number during evaluation.
 fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let a = args.remove(0);
     let b = args.remove(0);
@@ -198,10 +247,16 @@ fn eval_le(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     }
 }
 
+/// (vec *item...*)
+/// Creates a new heap-allocated vector of the *item* values passed to this
+/// function.
 fn eval_vec(ctx: &mut Context, args: Vec<Expr>) -> Expr {
     Expr::Vec(ctx.allocate(Mem::Vec(OVec::new_from(args))))
 }
 
+/// (index *list* *index*)
+/// Returns the value at the *index* indice in the *list* object. Returns null
+/// if the *index* is past the length of the *list*.
 fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
     let key = args.remove(0);
@@ -211,6 +266,8 @@ fn eval_index(_: &mut Context, mut args: Vec<Expr>) -> Expr {
         .unwrap_or(Expr::Null)
 }
 
+/// (first *list*)
+/// Returns the first (0th) value in the *list*.
 fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let value = args.remove(0);
 
@@ -219,11 +276,15 @@ fn eval_first(_: &mut Context, mut args: Vec<Expr>) -> Expr {
         .unwrap_or(Expr::Null)
 }
 
+/// (rest *list*)
+/// Returns a vector of all values in *list* but the first.
 fn eval_rest(ctx: &mut Context, mut args: Vec<Expr>) -> Expr {
     args.remove(0);
     Expr::Vec(ctx.allocate(Mem::Vec(OVec::new_from(args))))
 }
 
+/// (null? *value*)
+/// Returns true is the value is equal to null, false otherwise.
 fn eval_nullq(_: &mut Context, args: Vec<Expr>) -> Expr {
     match &args[0] {
         &Expr::Null => Expr::Int(1),
@@ -243,6 +304,8 @@ fn eval_println(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     Expr::Null
 }
 
+/// (random *max*)
+/// Returns a random integer in the range from 0 to *max*.
 fn eval_random(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let n = args.remove(0);
 
@@ -250,6 +313,8 @@ fn eval_random(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     Expr::Int(rng.gen_range(0, n.as_int()))
 }
 
+/// (len *list*)
+/// Returns an integer representing the length of *list*.
 fn eval_len(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     let list = args.remove(0);
 
@@ -257,14 +322,21 @@ fn eval_len(_: &mut Context, mut args: Vec<Expr>) -> Expr {
     Expr::Int(vec.len() as i32)
 }
 
+/// Shorthand for allocating a special form function in the context's heap,
+/// then returning an expression referencing the function.
 fn wrap_special(ctx: &mut Context, item: Box<SpecialFn>) -> Expr {
     Expr::Special(ctx.allocate(Mem::Special(item)))
 }
 
+/// Shorthand for allocating a normal function in the context's heap,
+/// then returning an expression referencing the function.
 fn wrap_fn(ctx: &mut Context, item: Box<FuncFn>, scope: &Ac) -> Expr {
     Expr::Func(ctx.allocate(Mem::Func(item, scope.clone())))
 }
 
+/// Populates a scope with the default global values, a list of special forms
+/// and functions defining the *standard library* and enabling user code to be
+/// run.
 pub fn populate_global(ctx: &mut Context, scope: Ac) {
     let s = scope.get().as_scope();
 
