@@ -3,4 +3,4 @@
     m
     (inner (+ m 1) n)))
 
-(println "Called inner loop {0} times!" (inner 0 10000))
+(println "Called inner loop {0} times!" (inner 0 1000))

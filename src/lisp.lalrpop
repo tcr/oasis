@@ -1,32 +1,50 @@
+//! This is an LALRPOP compiled file. https://github.com/nikomatsakis/lalrpop
+//! We generate an LR(1) grammar directly into an AST object which can then
+//! be evaluated by the Oasis interpreter.
+
 use std::str::FromStr;
 use ast::*;
 
+// LALRPOP grammars begin with this "grammar;" directive.
 grammar;
 
-pub Exprs: Vec<Expr> = { // (1)
+// A collection of Expr objects is simply a sequence of parsed AST objects.
+pub Exprs: Vec<Ast> = {
     <v:(<Expr>)*> => v,
 };
 
-Expr: Expr = {
-    "(" <Exprs> ")" => Expr::SExpr(<>),
-    "null" => Expr::Null,
-    Num => Expr::Int(<>),
+// Parse an AST expression.
+Expr: Ast = {
+    // Matching an S-Expr (sequence of expressions surrounded by parens).
+    "(" <Exprs> ")" => Ast::List(<>),
+    // Match the literal value "null".
+    "null" => Ast::Null,
+    // Match a Num term.
+    Num => Ast::Int(<>),
+    // Match a double-quoted string.
     r#""(?:[^"\\]|\\.)*""# => {
       let val = <>;
-      Expr::Str(val[1..val.len() - 1].to_owned())
+      Ast::Str(val[1..val.len() - 1].to_owned())
     },
+    // Match a single-quoted string.
     r#"'(?:[^'\\]|\\.)*'"# => {
       let val = <>;
-      Expr::Str(val[1..val.len() - 1].to_owned())
+      Ast::Str(val[1..val.len() - 1].to_owned())
     },
-    r";[^;\n\r]*" => Expr::Null,
-    Term => Expr::Atom(<>),
+    // Match a comment and discard it as a null expression.
+    // TODO: These values should be discarded at the LALRPOP level.
+    r";[^;\n\r]*" => Ast::Null,
+    // Match any token and treat it as an atom.
+    Term => Ast::Atom(<>),
 };
 
+// Match any sequence of token characters. These tokens should not conflict
+// with the parsing sequences for quoted strings, numbers, parens, etc.
 Term: String = {
     r#"[A-Za-z_?+*/.=<>-]+[0-9A-Za-z_?+*/.=<>-]*"# => (<>).to_owned()
 };
 
+// Match any valid integer value and treat it as a 32-bit signed integer.
 Num: i32 = {
     r"[0-9]+" => i32::from_str(<>).unwrap()
 };

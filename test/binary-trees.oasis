@@ -24,6 +24,7 @@
 (defn iterate-trees (mx mn d)
   (let (iterations (<< 1 (+ mx mn (- d))))
     (defn inner (result i)
+      ; (gc)
       (if (= i (+ iterations 1))
         result
         (inner (+ result
@@ -53,4 +54,4 @@
     (println "long lived tree of depth {0}\t check: {1}"
              max-depth (item-check long-lived-tree))))
 
-(main 10)
+(main 6)

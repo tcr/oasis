@@ -1,0 +1,90 @@
+@startuml
+
+title Oasis UML Diagram
+
+class Ac {
+  -inner: Rc<Mem>
+  -priv_id: String
+  +new(item: Mem) -> Ac
+}
+
+enum Mem {
+  Vec[OVec<Expr>]
+  Func[Box<FuncFn>, Ac]
+  Special[Box<SpecialFn>]
+  Scope[Scope]
+  Deallocated
+  +as_vec(&self) -> &OVec<Expr>
+  +as_vec_mut(&mut self) -> &mut OVec<Expr>
+  +as_func(&self) -> (&Box<FuncFn>, &Ac)
+  +as_special(&self) -> &Box<SpecialFn>
+  +as_scope(&self) -> &Scope
+}
+
+interface Allocator {
+  +pin(&mut self, Self::RefType) -> Self::RefOut
+}
+
+enum Expr {
+  Int[i32]
+  Atom[String]
+  Str[String]
+  Null
+  TailCall[AcId, Vec<Expr>]
+  List[Vec<Expr>]
+  Vec[Ac]
+  Func[Ac]
+  Special[Ac]
+  +from_ast(ctx: &mut Context, ast: &Ast) -> Expr
+  +new_atom(key: &str) -> Expr
+  +as_list(&self) -> &Vec<Expr>
+  +as_vec(&self) -> &OVec<Expr>
+  +as_bool(&self) -> bool
+  +as_int(&self) -> i32
+  +as_string(&self) -> String
+  +get_mem(&self) -> Option<&Ac>
+}
+
+class Scope {
+  +parent: Option<Ac>
+  +scope: RefCell<OMap<Expr, Expr>>
+  +new(ctx: &mut Context, parent: Option<Ac>) -> Ac
+  +set(&self, key: Expr, value: Expr)
+  +set_atom(&self, key: &str, value: Expr)
+  +lookup<F: Fn(Option<&Expr>) -> T, T>(&self, key: &Expr, inner: F) -> Option<T>
+}
+
+class Context {
+  +callstack: Vec<(AcId, bool)>
+  +alloc: AcArena
+  +new() -> Context
+  +allocate(&mut self, value: Mem) -> Ac
+  +eval_expr(&mut self, scope: Ac, x: Expr, args: Vec<Expr>) -> Expr
+  +eval(&mut self, scope: Ac, expr: Expr) -> Expr
+}
+
+enum Ast {
+  +Int[i32]
+  +Atom[String]
+  +List[Vec<Ast>]
+  +Str[String]
+  +Null
+}
+
+class AcArena {
+  type RefType = Mem
+  type RefOut = Ac
+  +new() -> AcArena
+}
+
+
+Allocator *-up- AcArena: Implements
+Ac -down-* Mem: Wraps
+Ast -up-* Expr: Into
+Scope <|-down-|> Context: One-to-many
+Expr --* Ac: Wraps
+AcArena <|-left-|> Context: One-to-One
+AcArena *-right- Ac: Allocated by
+Scope -right-> Expr: Evaluates
+
+@enduml
